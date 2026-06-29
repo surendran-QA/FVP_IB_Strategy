@@ -16,6 +16,7 @@ namespace CustomStrategies.Calculations
         /// PRIMARY OVERLOAD for Background Mode backtesting.
         /// Accepts pre-accumulated IB phase bars instead of scanning hdm backward.
         /// This avoids the hdm.Count=2 bug where GetHistory() does not pre-load history.
+        /// This avoids the hdm.Count=2 bug where GetHistory() does not pre-load history.
         /// </summary>
         public bool CalculateIBFromBuffer(List<HistoryItemBar> ibPhaseBarBuffer, Symbol currentSymbol, DateTime targetDate, int profileStepTicks, int doubleDistMinTicks, out MarketData data, out bool isPrecise, double lvnThreshold = 0.12, double hvn2MinRatio = 0.30)
         {
@@ -53,13 +54,13 @@ namespace CustomStrategies.Calculations
         /// LEGACY OVERLOAD — scans backward through hdm for IB bars.
         /// Only works correctly when hdm is fully pre-loaded (not in Background Mode).
         /// </summary>
-        public bool CalculateIB(HistoricalData hdm, Symbol currentSymbol, DateTime targetDate, int profileStepTicks, int doubleDistMinTicks, out MarketData data, out bool isPrecise, double lvnThreshold = 0.12, double hvn2MinRatio = 0.30)
+        public bool CalculateIB(HistoricalData hdm, Symbol currentSymbol, DateTime targetDate, int ibDurationMinutes, int profileStepTicks, int doubleDistMinTicks, out MarketData data, out bool isPrecise, double lvnThreshold = 0.12, double hvn2MinRatio = 0.30)
         {
             isPrecise = false;
             data = null;
 
             // 1. Data Ingestion (SRP & DST Fix)
-            var profileBars = _dataIngestion.GetProfileBars(hdm, targetDate, out double ibHigh, out double ibLow);
+            var profileBars = _dataIngestion.GetProfileBars(hdm, targetDate, ibDurationMinutes, out double ibHigh, out double ibLow);
             if (profileBars.Count == 0)
                 return false;
 

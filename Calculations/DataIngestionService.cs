@@ -6,7 +6,7 @@ namespace CustomStrategies.Calculations
 {
     public class DataIngestionService
     {
-        public List<HistoryItemBar> GetProfileBars(HistoricalData hdm, DateTime targetDate, out double ibHigh, out double ibLow)
+        public List<HistoryItemBar> GetProfileBars(HistoricalData hdm, DateTime targetDate, int ibDurationMinutes, out double ibHigh, out double ibLow)
         {
             var profileBars = new List<HistoryItemBar>();
             ibHigh = double.MinValue;
@@ -28,8 +28,11 @@ namespace CustomStrategies.Calculations
                 if (barEst.Date == currentSimDate)
                 {
                     TimeSpan t = barEst.TimeOfDay;
-                    // US Equity Market Open: 9:30 AM to 10:00 AM Eastern Time
-                    if (t >= new TimeSpan(9, 30, 0) && t < new TimeSpan(10, 0, 0))
+                    TimeSpan ibStartTime = new TimeSpan(9, 30, 0);
+                    TimeSpan ibEndTime = ibStartTime.Add(TimeSpan.FromMinutes(ibDurationMinutes));
+
+                    // Dynamic IB Window (e.g. 9:30 AM to 10:00 AM if 30 mins)
+                    if (t >= ibStartTime && t < ibEndTime)
                     {
                         profileBars.Add(bar);
                         if (bar.High > ibHigh) ibHigh = bar.High;
