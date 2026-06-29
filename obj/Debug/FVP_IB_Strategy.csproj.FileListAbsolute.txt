@@ -16,3 +16,4 @@ C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.dll
 C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\refint\FVP_IB_Strategy.dll
 C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.pdb
 C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\ref\FVP_IB_Strategy.dll
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.sourcelink.json

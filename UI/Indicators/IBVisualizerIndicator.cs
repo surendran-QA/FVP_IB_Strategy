@@ -94,7 +94,7 @@ namespace CustomStrategies
 
         public IBVisualizerIndicator()
         {
-            Name = "FVP IB Indicator v2.0";
+            Name = "FVP IB Indicator V1";
             Description = "Visualizes FVP IB Phase mathematically";
             this.SeparateWindow = false;
             this.HistoricalEndDate = DateTime.Today.AddDays(-1);
@@ -570,3 +570,4 @@ namespace CustomStrategies
         }
     }
 }
+

@@ -80,7 +80,7 @@ namespace CustomStrategies
 
         public FVP_IB_Strategy() : base()
         {
-            this.Name = "FVP IB Strategy v2.0";
+            this.Name = "FVP IB Strategy V1";
             this.Description = "Fixed Volume Profile & Initial Balance Strategy";
         }
 
@@ -562,3 +562,4 @@ namespace CustomStrategies
         }
     }
 }
+
