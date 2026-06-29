@@ -38,3 +38,10 @@ When the user requests a change to a foundational piece of logic or a hardcoded 
 1. **Mandatory Impact Audit:** You MUST perform a global grep_search across the entire codebase to identify all affected files, variables, UI components, and visualizers.
 2. **Pre-Execution Listing:** Before writing any code, you MUST list out every affected area in an implementation_plan.md and explicitly await user approval.
 3. **No Blind Updates:** Do not assume a change only affects the core engine; always verify the UI/Indicators and downstream simulator dependencies.
+
+## Release & DLL Management
+When finalizing a branch (e.g., elease/phase1 or eature/phase1.1):
+1. Ensure the project builds successfully.
+2. Copy the resulting .dll file from the Quantower output directory and store it in the Releases/ folder at the root of this repository.
+3. Rename the stored .dll to include the specific version (e.g., Releases/FVP_IB_Strategy_V1.dll or Releases/FVP_IB_Strategy_V1.1.dll) so multiple releases can be safely archived side-by-side in Git.
+4. Keep the .csproj <AssemblyName> as FVP_IB_Strategy and <OutputPath> as the single active Quantower directory, meaning Quantower only ever runs the most recently compiled version, avoiding clutter.
