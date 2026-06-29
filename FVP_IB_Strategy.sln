@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36930.0 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FVP_IB_Strategy", "FVP_IB_Strategy.csproj", "{B8DF61F6-5210-4A32-B673-E91D377E713F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B8DF61F6-5210-4A32-B673-E91D377E713F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8DF61F6-5210-4A32-B673-E91D377E713F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8DF61F6-5210-4A32-B673-E91D377E713F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8DF61F6-5210-4A32-B673-E91D377E713F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {425CD3F3-D3D8-47C9-B2A4-89B609A5DD83}
+	EndGlobalSection
+EndGlobal

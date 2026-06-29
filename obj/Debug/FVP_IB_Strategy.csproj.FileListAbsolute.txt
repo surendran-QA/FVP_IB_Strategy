@@ -1,0 +1,18 @@
+C:\Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\FVP_IB_Strategy.deps.json
+C:\Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\FVP_IB_Strategy.dll
+C:\Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\FVP_IB_Strategy.pdb
+C:\AMP Quantower\Settings\Scripts\Indicators\FVP_IB_Strategy\FVP_IB_Strategy.deps.json
+C:\AMP Quantower\Settings\Scripts\Indicators\FVP_IB_Strategy\FVP_IB_Strategy.dll
+C:\AMP Quantower\Settings\Scripts\Indicators\FVP_IB_Strategy\FVP_IB_Strategy.pdb
+C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\FVP_IB_Strategy.deps.json
+C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\FVP_IB_Strategy.dll
+C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\FVP_IB_Strategy.pdb
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.csproj.AssemblyReference.cache
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.GeneratedMSBuildEditorConfig.editorconfig
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.AssemblyInfoInputs.cache
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.AssemblyInfo.cs
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.csproj.CoreCompileInputs.cache
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.dll
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\refint\FVP_IB_Strategy.dll
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\FVP_IB_Strategy.pdb
+C:\Surendran\Statergy devolpment\FVP_IB_Strategy\obj\Debug\ref\FVP_IB_Strategy.dll
