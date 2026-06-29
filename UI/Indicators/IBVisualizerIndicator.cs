@@ -139,7 +139,7 @@ namespace CustomStrategies
                 return;
             }
 
-            if (currentTime >= ibEndTime)
+            if (currentTime >= ibEndTime && (!isIBCalculated || lastCalculatedDate != istTime.Date))
             {
                 if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, istTime, this.IBDurationMinutes, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
                 {
@@ -148,7 +148,7 @@ namespace CustomStrategies
                     sim.SimulateExecution(md, this.HistoricalData, ibEndTime, EndTradingTime, istTz);
 
                     CacheIB(md, istTime.Date, isPrecise, false);
-                    currentDayStatus = "Live: Calculated " + istTime.ToShortDateString() + (isPrecise ? " (Precise)" : " (Fallback)");
+                    currentDayStatus = "Live: " + (isPrecise ? "Precise" : "Fallback");
                     
                     isIBCalculated = true;
                     lastCalculatedDate = istTime.Date;
@@ -225,9 +225,9 @@ namespace CustomStrategies
             });
 
             if (isHistorical)
-                historyStatus = $"History: Calculated {currentSimDate.ToShortDateString()} {(isPrecise ? "(Precise)" : "(Fallback)")}. Cached IBs: {cachedIBs.Count}";
+                historyStatus = $"History: {cachedIBs.Count} IBs";
             else
-                currentDayStatus = $"Live: Calculated {currentSimDate.ToShortDateString()} {(isPrecise ? "(Precise)" : "(Fallback)")}. Cached IBs: {cachedIBs.Count}";
+                currentDayStatus = $"Live: {(isPrecise ? "Precise" : "Fallback")}";
         }
 
         public override void OnPaintChart(PaintChartEventArgs args)
@@ -445,7 +445,7 @@ namespace CustomStrategies
                         DailyIB liveIb = cachedIBs.FirstOrDefault(i => !i.IsHistorical);
                         bool hasSignal = liveIb != null && liveIb.Signal != null && liveIb.CurrentShape != VolumeProfileShape.Unknown;
                         
-                        int tableWidth = 320;
+                        int tableWidth = 200;
                         int tableHeight = hasSignal ? 150 : 35;
                         if (ShowCacheInfo) tableHeight += 45;
                         
