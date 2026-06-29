@@ -18,6 +18,9 @@ namespace CustomStrategies
         [InputParameter("End Trading Time (EST)", 1)]
         public TimeSpan EndTradingTime { get; set; } = new TimeSpan(16, 0, 0);
 
+        [InputParameter("IB Duration (Minutes)", 17, minimum: 5, maximum: 240)]
+        public int IBDurationMinutes { get; set; } = 30;
+
         [InputParameter("Profile Step (Ticks)", 2, minimum: 1, maximum: 100)]
         public int ProfileStepTicks { get; set; } = 4;
 
@@ -61,7 +64,9 @@ namespace CustomStrategies
             DateTime istTime = TimeZoneInfo.ConvertTimeFromUtc(currentBar.TimeLeft, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
             TimeSpan currentTime = istTime.TimeOfDay;
 
-            bool isIBPhase = currentTime >= new TimeSpan(9, 30, 0) && currentTime < new TimeSpan(10, 0, 0);
+            TimeSpan ibStartTime = new TimeSpan(9, 30, 0);
+            TimeSpan ibEndTime = ibStartTime.Add(TimeSpan.FromMinutes(this.IBDurationMinutes));
+            bool isIBPhase = currentTime >= ibStartTime && currentTime < ibEndTime;
 
             if (isIBPhase)
             {
@@ -69,12 +74,12 @@ namespace CustomStrategies
                 return;
             }
 
-            if (currentTime >= new TimeSpan(10, 0, 0))
+            if (currentTime >= ibEndTime)
             {
-                if (engine.CalculateIB(this.Symbol, istTime, new TimeSpan(9, 30, 0), StartTradingTime, ProfileStepTicks, out MarketData md))
+                if (engine.CalculateIB(this.Symbol, istTime, ibStartTime, ibEndTime, ProfileStepTicks, out MarketData md))
                 {
                     ExecutionSimulator sim = new ExecutionSimulator();
-                    sim.SimulateExecution(md, this.HistoricalData, new TimeSpan(10, 0, 0), EndTradingTime, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
+                    sim.SimulateExecution(md, this.HistoricalData, ibEndTime, EndTradingTime, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
 
                     CacheIB(md, istTime.Date);
                     isIBCalculated = true;
@@ -274,3 +279,4 @@ namespace CustomStrategies
         }
     }
 }
+

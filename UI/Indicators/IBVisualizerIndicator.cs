@@ -195,7 +195,7 @@ namespace CustomStrategies
         {
             TimeZoneInfo istTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
             DateTime profileStartIst = currentSimDate.Add(new TimeSpan(9, 30, 0));
-            DateTime execStartIst = currentSimDate.Add(new TimeSpan(10, 0, 0));
+            DateTime execStartIst = currentSimDate.Add(new TimeSpan(9, 30, 0)).AddMinutes(this.IBDurationMinutes);
 
             DateTime sessionEndIst;
             if (EndTradingTime < StartTradingTime)
