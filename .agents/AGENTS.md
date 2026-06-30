@@ -45,3 +45,7 @@ When finalizing a branch (e.g., elease/phase1 or eature/phase1.1):
 2. Copy the resulting .dll file from the Quantower output directory and store it in the Releases/ folder at the root of this repository.
 3. Rename the stored .dll to include the specific version (e.g., Releases/FVP_IB_Strategy_V1.dll or Releases/FVP_IB_Strategy_V1.1.dll) so multiple releases can be safely archived side-by-side in Git.
 4. Keep the .csproj <AssemblyName> as FVP_IB_Strategy and <OutputPath> as the single active Quantower directory, meaning Quantower only ever runs the most recently compiled version, avoiding clutter.
+
+## Git Workflow & Pushing
+- **NEVER** run git push automatically after making commits. 
+- You may commit changes locally to track progress, but you MUST wait for explicit user instruction before pushing any changes to a remote branch. The user will dictate exactly when and to which branch a push should occur.
