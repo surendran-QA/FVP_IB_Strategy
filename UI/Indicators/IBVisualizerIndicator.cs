@@ -44,6 +44,9 @@ namespace CustomStrategies
         [InputParameter("End Trading Time (EST)", 1)]
         public TimeSpan EndTradingTime { get; set; } = new TimeSpan(16, 0, 0);
 
+        [InputParameter("IB Duration (Minutes)", 17, minimum: 5, maximum: 240)]
+        public int IBDurationMinutes { get; set; } = 30;
+
         [InputParameter("Profile Step (Ticks)", 2, minimum: 1, maximum: 100)]
         public int ProfileStepTicks { get; set; } = 4;
 
@@ -94,7 +97,7 @@ namespace CustomStrategies
 
         public IBVisualizerIndicator()
         {
-            Name = "FVP IB Indicator v2.0";
+            Name = "FVP IB Indicator V1.1";
             Description = "Visualizes FVP IB Phase mathematically";
             this.SeparateWindow = false;
             this.HistoricalEndDate = DateTime.Today.AddDays(-1);
@@ -125,25 +128,27 @@ namespace CustomStrategies
             DateTime istTime = TimeZoneInfo.ConvertTimeFromUtc(currentBar.TimeLeft, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
             TimeSpan currentTime = istTime.TimeOfDay;
 
-            bool isIBPhase = currentTime >= new TimeSpan(9, 30, 0) && currentTime < new TimeSpan(10, 0, 0);
+            TimeSpan ibStartTime = new TimeSpan(9, 30, 0);
+            TimeSpan ibEndTime = ibStartTime.Add(TimeSpan.FromMinutes(this.IBDurationMinutes));
+            bool isIBPhase = currentTime >= ibStartTime && currentTime < ibEndTime;
 
             if (isIBPhase)
             {
                 isIBCalculated = false;
-                currentDayStatus = "Waiting for IB phase to finish (10:00)";
+                currentDayStatus = "Waiting for IB phase to finish";
                 return;
             }
 
-            if (currentTime >= new TimeSpan(10, 0, 0))
+            if (currentTime >= ibEndTime && (!isIBCalculated || lastCalculatedDate != istTime.Date))
             {
-                if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, istTime, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
+                if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, istTime, this.IBDurationMinutes, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
                 {
                     TimeZoneInfo istTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
                     ExecutionSimulator sim = new ExecutionSimulator();
-                    sim.SimulateExecution(md, this.HistoricalData, new TimeSpan(10, 0, 0), EndTradingTime, istTz);
+                    sim.SimulateExecution(md, this.HistoricalData, ibEndTime, EndTradingTime, istTz);
 
                     CacheIB(md, istTime.Date, isPrecise, false);
-                    currentDayStatus = "Live: Calculated " + istTime.ToShortDateString() + (isPrecise ? " (Precise)" : " (Fallback)");
+                    currentDayStatus = "Live: " + (isPrecise ? "Precise" : "Fallback");
                     
                     isIBCalculated = true;
                     lastCalculatedDate = istTime.Date;
@@ -168,12 +173,14 @@ namespace CustomStrategies
                 {
                     if (!processedDates.Contains(currentSimDate))
                     {
-                        if (barIst.TimeOfDay >= new TimeSpan(10, 0, 0))
+                        TimeSpan ibStartTime = new TimeSpan(9, 30, 0);
+                        TimeSpan ibEndTime = ibStartTime.Add(TimeSpan.FromMinutes(this.IBDurationMinutes));
+                        if (barIst.TimeOfDay >= ibEndTime)
                         {
-                            if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, barIst, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
+                            if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, barIst, this.IBDurationMinutes, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
                             {
                                 ExecutionSimulator sim = new ExecutionSimulator();
-                                sim.SimulateExecution(md, this.HistoricalData, new TimeSpan(10, 0, 0), EndTradingTime, istTz);
+                                sim.SimulateExecution(md, this.HistoricalData, ibEndTime, EndTradingTime, istTz);
 
                                 processedDates.Add(currentSimDate);
                                 CacheIB(md, currentSimDate, isPrecise, true);
@@ -188,7 +195,7 @@ namespace CustomStrategies
         {
             TimeZoneInfo istTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
             DateTime profileStartIst = currentSimDate.Add(new TimeSpan(9, 30, 0));
-            DateTime execStartIst = currentSimDate.Add(new TimeSpan(10, 0, 0));
+            DateTime execStartIst = currentSimDate.Add(new TimeSpan(9, 30, 0)).AddMinutes(this.IBDurationMinutes);
 
             DateTime sessionEndIst;
             if (EndTradingTime < StartTradingTime)
@@ -218,9 +225,9 @@ namespace CustomStrategies
             });
 
             if (isHistorical)
-                historyStatus = $"History: Calculated {currentSimDate.ToShortDateString()} {(isPrecise ? "(Precise)" : "(Fallback)")}. Cached IBs: {cachedIBs.Count}";
+                historyStatus = $"History: {cachedIBs.Count} IBs";
             else
-                currentDayStatus = $"Live: Calculated {currentSimDate.ToShortDateString()} {(isPrecise ? "(Precise)" : "(Fallback)")}. Cached IBs: {cachedIBs.Count}";
+                currentDayStatus = $"Live: {(isPrecise ? "Precise" : "Fallback")}";
         }
 
         public override void OnPaintChart(PaintChartEventArgs args)
@@ -249,13 +256,15 @@ namespace CustomStrategies
                     if (TimeZoneInfo.ConvertTimeFromUtc(ib.ExecutionStartUtc, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time")).Date < istTime.Date)
                     {
                         ib.IsHistorical = true;
-                        currentDayStatus = "Live: Waiting for IB (10:00)";
+                        currentDayStatus = "Live: Waiting for IB";
                     }
                 }
                 
-                if (istTime.TimeOfDay >= new TimeSpan(10, 0, 0) && (!isIBCalculated || lastCalculatedDate != istTime.Date))
+                TimeSpan ibStartTime = new TimeSpan(9, 30, 0);
+                TimeSpan ibEndTime = ibStartTime.Add(TimeSpan.FromMinutes(this.IBDurationMinutes));
+                if (istTime.TimeOfDay >= ibEndTime && (!isIBCalculated || lastCalculatedDate != istTime.Date))
                 {
-                    if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, istTime, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
+                    if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, istTime, this.IBDurationMinutes, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
                     {
                         CacheIB(md, istTime.Date, isPrecise, false);
                         isIBCalculated = true;
@@ -436,7 +445,7 @@ namespace CustomStrategies
                         DailyIB liveIb = cachedIBs.FirstOrDefault(i => !i.IsHistorical);
                         bool hasSignal = liveIb != null && liveIb.Signal != null && liveIb.CurrentShape != VolumeProfileShape.Unknown;
                         
-                        int tableWidth = 320;
+                        int tableWidth = 200;
                         int tableHeight = hasSignal ? 150 : 35;
                         if (ShowCacheInfo) tableHeight += 45;
                         
@@ -570,3 +579,4 @@ namespace CustomStrategies
         }
     }
 }
+

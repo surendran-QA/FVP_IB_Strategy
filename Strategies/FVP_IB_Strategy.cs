@@ -25,6 +25,9 @@ namespace CustomStrategies
         [InputParameter("End Trading Time (EST)", 3)]
         public TimeSpan EndTradingTime { get; set; } = new TimeSpan(16, 0, 0);
 
+        [InputParameter("IB Duration (Minutes)", 4, minimum: 5, maximum: 240)]
+        public int IBDurationMinutes { get; set; } = 30;
+
         [InputParameter("Double Dist Min Ticks", 8, minimum: 1, maximum: 1000)]
         public int DoubleDistMinTicks { get; set; } = 40;
 
@@ -80,7 +83,7 @@ namespace CustomStrategies
 
         public FVP_IB_Strategy() : base()
         {
-            this.Name = "FVP IB Strategy v2.0";
+            this.Name = "FVP IB Strategy V1.1";
             this.Description = "Fixed Volume Profile & Initial Balance Strategy";
         }
 
@@ -393,7 +396,10 @@ namespace CustomStrategies
             TimeSpan currentTime = estTime.TimeOfDay;
             DateTime currentDate = estTime.Date;
 
-            bool isIBPhase = currentTime >= new TimeSpan(9, 30, 0) && currentTime < new TimeSpan(10, 0, 0);
+            TimeSpan ibStartTime = new TimeSpan(9, 30, 0);
+            TimeSpan ibEndTime = ibStartTime.Add(TimeSpan.FromMinutes(this.IBDurationMinutes));
+
+            bool isIBPhase = currentTime >= ibStartTime && currentTime < ibEndTime;
 
             // FIX: Skip weekends entirely. MNQ futures resume Sunday ~6 PM ET,
             // but there is no IB on Saturday or Sunday. Without this guard the strategy
@@ -419,7 +425,7 @@ namespace CustomStrategies
                 return; // Don't try to trade during IB phase
             }
 
-            if (currentTime >= new TimeSpan(10, 0, 0) && (!marketData.IsIBCalculated || marketData.LastCalculatedDate != currentDate))
+            if (currentTime >= ibEndTime && (!marketData.IsIBCalculated || marketData.LastCalculatedDate != currentDate))
             {
                 this.Log($"[IB] Attempting IB for {currentDate:yyyy-MM-dd} using historical data scan...", StrategyLoggingLevel.Trading);
                 
@@ -430,7 +436,7 @@ namespace CustomStrategies
                     catch { }
                 }
 
-                if (ibEngine.CalculateIB(this.hdm, this.CurrentSymbol, estTime, this.ProfileStepTicks, this.DoubleDistMinTicks, out marketData, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
+                if (ibEngine.CalculateIB(this.hdm, this.CurrentSymbol, estTime, this.IBDurationMinutes, this.ProfileStepTicks, this.DoubleDistMinTicks, out marketData, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
                 {
                     string mode = isPrecise ? "Tick" : "Fallback";
                     this.Log($"IB OK ({mode}) [{currentDate:yyyy-MM-dd}]: H={marketData.IB_High} L={marketData.IB_Low} POC={marketData.IB_POC} VAH={marketData.IB_VAH} VAL={marketData.IB_VAL} Shape={marketData.CurrentShape} Signal={marketData.Signal?.PreferredSide}", StrategyLoggingLevel.Trading);
@@ -562,3 +568,5 @@ namespace CustomStrategies
         }
     }
 }
+
+
