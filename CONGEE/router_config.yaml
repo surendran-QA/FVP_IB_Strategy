@@ -1,0 +1,20 @@
+model_list:
+  - model_name: antigravity-router
+    litellm_params:
+      model: gemini/gemini-3.1-flash-lite
+  - model_name: antigravity-fallback-1
+    litellm_params:
+      model: gemini/gemini-2.5-flash-lite
+  - model_name: antigravity-fallback-2
+    litellm_params:
+      model: gemini/gemini-3.5-flash
+  - model_name: antigravity-fallback-3
+    litellm_params:
+      model: gemini/gemini-3-flash
+  - model_name: antigravity-fallback-4
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+
+router_settings:
+  fallbacks:
+    - {"antigravity-router": ["antigravity-fallback-1", "antigravity-fallback-2", "antigravity-fallback-3", "antigravity-fallback-4"]}

@@ -52,10 +52,17 @@ namespace CustomStrategies
         })]
         public int DataAggregationMode { get; set; } = 1;
 
+        [InputParameter("Enable Cognee Webhook (AI Memory)", 16)]
+        public bool EnableCogneeWebhook { get; set; } = false;
+
+        [InputParameter("Automatically Trigger Gemini AI", 17)]
+        public bool AutoTriggerGemini { get; set; } = false;
+
         public override string[] MonitoringConnectionsIds => new string[] { this.CurrentSymbol?.ConnectionId, this.CurrentAccount?.ConnectionId };
 
         private HistoricalData hdm;
         private Indicator atrIndicator;
+        private bool historyInitialized = false;
 
         private MarketData marketData;
         private InitialBalanceEngine ibEngine;
@@ -67,6 +74,7 @@ namespace CustomStrategies
         private bool waitOpenPosition;
         private bool hasTradedToday;
         private DateTime lastTradedDate = DateTime.MinValue;
+        private DateTime lastSessionDate = DateTime.MinValue;
 
         private int totalTradesCount = 0;
         private int totalWins = 0;
@@ -80,10 +88,11 @@ namespace CustomStrategies
         private string activeCsvFilePath;
         private string activeAllSignalsCsvPath;
         private string activeDiagCsvPath; // Detailed per-day IB diagnostics
+        private string activeCogneePayloadsPath;
 
         public FVP_IB_Strategy() : base()
         {
-            this.Name = "FVP IB Strategy V1.1";
+            this.Name = "FVP IB Strategy V2";
             this.Description = "Fixed Volume Profile & Initial Balance Strategy";
         }
 
@@ -103,6 +112,7 @@ namespace CustomStrategies
                 this.activeCsvFilePath = System.IO.Path.Combine(baseDir, $"TradeReport_Executed_trades_{timestamp}_{symbolName}.csv");
                 this.activeAllSignalsCsvPath = System.IO.Path.Combine(baseDir, $"TradeReport_AllSignals_{timestamp}_{symbolName}.csv");
                 this.activeDiagCsvPath = System.IO.Path.Combine(baseDir, $"IBDiagnostics_{timestamp}_{symbolName}.csv");
+                this.activeCogneePayloadsPath = System.IO.Path.Combine(baseDir, $"cognee_payloads_{timestamp}_{symbolName}.txt");
 
                 global::FVP_IB_Strategy.Calculations.ReportExporter.InitializeReport(this.activeCsvFilePath);
                 global::FVP_IB_Strategy.Calculations.ReportExporter.InitializeReport(this.activeAllSignalsCsvPath);
@@ -144,28 +154,7 @@ namespace CustomStrategies
 
             this.atrIndicator = Core.Instance.Indicators.BuiltIn.ATR(14, MaMode.SMA);
 
-            // Fetch enough history to cover the full backtest window.
-            // Using -5 days because fetching -120 days for a September futures contract
-            // reaches back into March when there was no volume, causing the data server to return 0 bars.
-            DateTime historyFromDate = Core.TimeUtils.DateTimeUtcNow.AddDays(-5);
-            this.hdm = this.CurrentSymbol.GetHistory(this.Timeframe, this.CurrentSymbol.HistoryType, historyFromDate);
-            this.Log($"[INIT] History loaded: {this.hdm.Count} bars from {historyFromDate:yyyy-MM-dd} to now.", StrategyLoggingLevel.Trading);
-
-            // Bulletproof: Force the API to calculate true Volume Profile data for the history
-            if (this.DataAggregationMode == 1)
-            {
-                try
-                {
-                    Core.Instance.VolumeAnalysis.CalculateProfile(this.hdm);
-                }
-                catch (Exception ex)
-                {
-                    this.Log($"Failed to force Volume Analysis calculation: {ex.Message}", StrategyLoggingLevel.Error);
-                }
-            }
-
-            this.hdm.AddIndicator(this.atrIndicator);
-            this.hdm.HistoryItemUpdated += Hdm_HistoryItemUpdated;
+            // History loading is moved to OnUpdate to avoid the Quantower Backtester clock bug in OnRun.
 
             Core.PositionAdded += Core_PositionAdded;
             Core.PositionRemoved += Core_PositionRemoved;
@@ -373,6 +362,29 @@ namespace CustomStrategies
 
                 global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeCsvFilePath, dayOfWeek, sOrderPlaced, sEntryFill, sExitTime, obj.Symbol.Name, obj.Side.ToString(), obj.Quantity, entryPrice.ToString(), exitPrice.ToString(), Math.Round(pnl, 2).ToString(), status, result, shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                 global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, sEntryFill, sExitTime, obj.Symbol.Name, obj.Side.ToString(), obj.Quantity, entryPrice.ToString(), exitPrice.ToString(), Math.Round(pnl, 2).ToString(), status, result, shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
+                
+                string execution = obj.Side.ToString() + " at " + (marketData?.Signal != null && Math.Abs(marketData.Signal.EntryPrice - marketData.IB_LVN) < obj.Symbol.TickSize*10 ? "LVN" : "POC");
+                global::FVP_IB_Strategy.Calculations.ReportExporter.AppendCogneePayload(
+                    activeCogneePayloadsPath, 
+                    obj.Symbol.Name, 
+                    entryTimeIst, 
+                    shapeStr, 
+                    execution, 
+                    status, 
+                    result, 
+                    ibHvn1, 
+                    ibHvn2, 
+                    ibLvn, 
+                    marketData?.IB_High ?? double.NaN, 
+                    marketData?.IB_Low ?? double.NaN, 
+                    marketData?.IB_POC ?? double.NaN, 
+                    marketData?.IB_VAH ?? double.NaN, 
+                    marketData?.IB_VAL ?? double.NaN, 
+                    entryPrice, 
+                    marketData?.Signal?.StopLoss ?? double.NaN, 
+                    marketData?.Signal?.TakeProfit ?? double.NaN, 
+                    this.EnableCogneeWebhook, 
+                    this.AutoTriggerGemini);
             }
         }
 
@@ -383,11 +395,36 @@ namespace CustomStrategies
 
         private void OnUpdate()
         {
+            if (!this.historyInitialized)
+            {
+                // In OnUpdate, Core.TimeUtils.DateTimeUtcNow holds the proper backtest simulation clock (e.g. 6/22/2026)!
+                DateTime historyFromDate = Core.TimeUtils.DateTimeUtcNow.AddDays(-5);
+                this.hdm = this.CurrentSymbol.GetHistory(this.Timeframe, this.CurrentSymbol.HistoryType, historyFromDate);
+                this.Log($"[INIT] History loaded: {this.hdm.Count} bars from {historyFromDate:yyyy-MM-dd} to now.", StrategyLoggingLevel.Trading);
+
+                if (this.DataAggregationMode == 1 && this.hdm.Count > 0)
+                {
+                    try
+                    {
+                        Core.Instance.VolumeAnalysis.CalculateProfile(this.hdm);
+                    }
+                    catch (Exception ex)
+                    {
+                        this.Log($"Failed to force Volume Analysis calculation: {ex.Message}", StrategyLoggingLevel.Error);
+                    }
+                }
+
+                this.hdm.AddIndicator(this.atrIndicator);
+                this.hdm.HistoryItemUpdated += Hdm_HistoryItemUpdated;
+                this.historyInitialized = true;
+            }
+
             if (this.hdm.Count < 2) return;
 
             EnsureReportsInitialized();
 
-            this.currentSimTime = this.hdm[0].TimeLeft;
+            // GHOST FILTER & DST FIX: Use Core.TimeUtils.DateTimeUtcNow instead of forming bar's TimeLeft
+            this.currentSimTime = Core.TimeUtils.DateTimeUtcNow;
 
             // TIMEZONE FIX: Use bar's CloseTime or TimeLeft - always UTC in Quantower
             // Use "Eastern Standard Time" which correctly handles EDT/EST automatically
@@ -417,6 +454,15 @@ namespace CustomStrategies
             // --- Reset hasTradedToday on new day ---
             if (currentDate != lastTradedDate)
                 hasTradedToday = false;
+                
+            // --- EXPLICIT SESSION RESET (FLAW #1 FIX) ---
+            if (currentDate != lastSessionDate)
+            {
+                this.marketData = new MarketData(); // Completely wipe the structs/arrays
+                this.ibEngine = new InitialBalanceEngine(); // Re-instantiate the engine to clear any internal buffers
+                this.lastSessionDate = currentDate;
+                this.Log($"[RESET] Session explicitly wiped for {currentDate:yyyy-MM-dd}", StrategyLoggingLevel.Trading);
+            }
 
             if (isIBPhase)
             {
@@ -523,6 +569,28 @@ namespace CustomStrategies
 
                         global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeCsvFilePath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, order.Side.ToString(), order.TotalQuantity, entryPrice.ToString(), "-", "0", "Pending (Not Triggered)", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                         global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, order.Side.ToString(), order.TotalQuantity, entryPrice.ToString(), "-", "0", "Pending (Not Triggered)", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
+                        
+                        global::FVP_IB_Strategy.Calculations.ReportExporter.AppendCogneePayload(
+                            activeCogneePayloadsPath, 
+                            this.CurrentSymbol.Name, 
+                            orderPlacedIst, 
+                            shapeStr, 
+                            "NONE", 
+                            "Cancelled", 
+                            "EOD Reached", 
+                            ibHvn1, 
+                            ibHvn2, 
+                            ibLvn, 
+                            marketData?.IB_High ?? double.NaN, 
+                            marketData?.IB_Low ?? double.NaN, 
+                            marketData?.IB_POC ?? double.NaN, 
+                            marketData?.IB_VAH ?? double.NaN, 
+                            marketData?.IB_VAL ?? double.NaN, 
+                            entryPrice, 
+                            marketData?.Signal?.StopLoss ?? double.NaN, 
+                            marketData?.Signal?.TakeProfit ?? double.NaN, 
+                            this.EnableCogneeWebhook, 
+                            this.AutoTriggerGemini);
                     }
                     return;
                 }
@@ -560,6 +628,28 @@ namespace CustomStrategies
 
                             this.Log($"FADE Signal Generated (No Trade Day). Logging to AllSignals CSV for ML Training.", StrategyLoggingLevel.Trading);
                             global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, "FADE", 1, "-", "-", "0", "No Signal", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
+                            
+                            global::FVP_IB_Strategy.Calculations.ReportExporter.AppendCogneePayload(
+                                activeCogneePayloadsPath, 
+                                this.CurrentSymbol.Name, 
+                                estTime, 
+                                shapeStr, 
+                                "FADE", 
+                                "No Signal", 
+                                "No Trade Day", 
+                                ibHvn1, 
+                                ibHvn2, 
+                                ibLvn, 
+                                marketData.IB_High, 
+                                marketData.IB_Low, 
+                                marketData.IB_POC, 
+                                marketData.IB_VAH, 
+                                marketData.IB_VAL, 
+                                marketData.Signal.EntryPrice, 
+                                marketData.Signal.StopLoss, 
+                                marketData.Signal.TakeProfit, 
+                                this.EnableCogneeWebhook, 
+                                this.AutoTriggerGemini);
                             hasTradedToday = true; // Prevents logging multiple times per day
                         }
                     }

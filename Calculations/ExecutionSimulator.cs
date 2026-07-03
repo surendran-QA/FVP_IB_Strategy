@@ -21,7 +21,8 @@ namespace CustomStrategies.Calculations
 
             DateTime ibEndIst = targetDate.Value.Date.Add(ibEndTime);
 
-            // Loop through the history starting from ibEndIst up to sessionEndIst
+            // In Quantower, history[0] is the NEWEST bar, and history[Count-1] is the OLDEST bar.
+            // To simulate forward in time, we MUST loop backwards from Count-1 down to 0!
             for (int i = history.Count - 1; i >= 0; i--)
             {
                 var bar = (HistoryItemBar)history[i];
@@ -38,6 +39,11 @@ namespace CustomStrategies.Calculations
                         entryHit = true;
                     else if (md.Signal.PreferredSide == "SHORT" && bar.High >= md.Signal.EntryPrice && bar.Low <= md.Signal.EntryPrice)
                         entryHit = true;
+                    else if (md.Signal.PreferredSide == "FADE")
+                    {
+                        if (bar.High >= md.Signal.EntryPrice && bar.Low <= md.Signal.EntryPrice)
+                            entryHit = true;
+                    }
 
                     if (entryHit)
                     {
@@ -53,7 +59,7 @@ namespace CustomStrategies.Calculations
                     bool slHit = false;
                     bool tpHit = false;
 
-                    if (md.Signal.PreferredSide == "LONG")
+                    if (md.Signal.PreferredSide == "LONG" || md.Signal.PreferredSide == "FADE")
                     {
                         if (bar.Low <= md.Signal.StopLoss) slHit = true;
                         if (bar.High >= md.Signal.TakeProfit) tpHit = true;

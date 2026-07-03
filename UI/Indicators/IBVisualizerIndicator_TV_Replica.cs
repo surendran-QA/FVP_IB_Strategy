@@ -44,7 +44,7 @@ namespace CustomStrategies
 
         public IBVisualizerIndicator_TV_Replica() 
         {
-            this.Name = "IB Visualizer (TV Replica) v1.1";
+            this.Name = "IB Visualizer (TV Replica) V2";
             this.SeparateWindow = false;
         }
 

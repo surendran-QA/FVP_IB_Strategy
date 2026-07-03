@@ -97,10 +97,16 @@ namespace CustomStrategies.Calculations
                     upIdx++;
                     currentAreaVol += upVol;
                 }
-                else
+                else if (downVol > upVol)
                 {
                     downIdx--;
                     currentAreaVol += downVol;
+                }
+                else
+                {
+                    upIdx++;
+                    downIdx--;
+                    currentAreaVol += (upVol + downVol);
                 }
             }
 

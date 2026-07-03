@@ -46,6 +46,21 @@ When finalizing a branch (e.g., elease/phase1 or eature/phase1.1):
 3. Rename the stored .dll to include the specific version (e.g., Releases/FVP_IB_Strategy_V1.dll or Releases/FVP_IB_Strategy_V1.1.dll) so multiple releases can be safely archived side-by-side in Git.
 4. Keep the .csproj <AssemblyName> as FVP_IB_Strategy and <OutputPath> as the single active Quantower directory, meaning Quantower only ever runs the most recently compiled version, avoiding clutter.
 
+## Version Naming Sync
+When advancing to a new Phase of the roadmap (e.g., Phase 1 to Phase 2), you MUST explicitly update the internal C# `.Name` properties of all Strategies and Indicators to match the new version (e.g., "FVP IB Strategy V2"). This ensures the Quantower UI accurately reflects the active codebase phase.
+
 ## Git Workflow & Pushing
 - **NEVER** run git push automatically after making commits. 
 - You may commit changes locally to track progress, but you MUST wait for explicit user instruction before pushing any changes to a remote branch. The user will dictate exactly when and to which branch a push should occur.
+
+## Quantower Market Replay & Indicator Simulation
+- **Historical Array Indexing:** Quantower's `HistoricalData` is reverse-chronological. Index `0` is the NEWEST bar, and index `Count - 1` is the OLDEST bar. To loop through history forward in time (chronologically), you MUST iterate backwards: `for (int i = history.Count - 1; i >= 0; i--)`.
+- **Replay Streaming:** In Market Replay, historical bars stream in tick-by-tick. If an Indicator runs a simulation (e.g., tracking trade execution) on historical data, it cannot just run once. It must continuously evaluate open states inside `OnUpdate()` because the "future" bars of that historical day haven't been loaded into the chart yet.
+- **OHLC Bar Intra-Bar Simulation:** When using a custom `ExecutionSimulator` on OHLC bars, it is completely normal for Entry and Exit (TP/SL) to trigger on the exact same bar (and thus show the exact same timestamp) if the bar's High/Low encompasses both price levels. Always evaluate SL before TP for conservative backtesting.
+
+## Cognee Ingestion & API Pacing (The Cognee Multiplier)
+- **Never** execute `cognee.cognify()` directly within a fast ingestion endpoint (e.g., FastAPI route).
+- **Always** decouple ingestion from processing:
+  1. The endpoint must dump the payload into an `asyncio.Queue` (or a Write-Ahead Log folder) and immediately return a `200 OK` to prevent blocking the client.
+  2. Implement a dedicated `asyncio.create_task()` Background Worker to consume the queue/log.
+  3. The Background Worker MUST enforce a strict delay (e.g., `await asyncio.sleep(20)`) between processing each payload to account for the multiple LLM requests triggered by `cognify()` and remain safely under the LLM's RPM limits.

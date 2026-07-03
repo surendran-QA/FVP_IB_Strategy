@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Drawing;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Text;
 using TradingPlatform.BusinessLayer;
 using CustomStrategies.Calculations;
 
@@ -86,6 +89,12 @@ namespace CustomStrategies
         })]
         public int DataAggregationMode { get; set; } = 1;
 
+        [InputParameter("Enable Cognee Webhook (AI Memory)", 17)]
+        public bool EnableCogneeWebhook { get; set; } = false;
+
+        [InputParameter("Automatically Trigger Gemini AI", 18)]
+        public bool AutoTriggerGemini { get; set; } = false;
+
         private bool isIBCalculated = false;
         private bool historyCalculated = false;
         private DateTime lastCalculatedDate = DateTime.MinValue;
@@ -94,10 +103,14 @@ namespace CustomStrategies
         
         private List<DailyIB> cachedIBs = new List<DailyIB>();
         private InitialBalanceEngine ibEngine = new InitialBalanceEngine();
+        private static readonly HttpClient httpClient = new HttpClient();
+        private bool hasSentToCogneeToday = false;
+        private DateTime lastSessionDate = DateTime.MinValue;
+        private string aiAdvice = "AI Advice: Waiting for 10:00 AM...";
 
         public IBVisualizerIndicator()
         {
-            Name = "FVP IB Indicator V1.1";
+            Name = "FVP IB Indicator V2";
             Description = "Visualizes FVP IB Phase mathematically";
             this.SeparateWindow = false;
             this.HistoricalEndDate = DateTime.Today.AddDays(-1);
@@ -117,6 +130,7 @@ namespace CustomStrategies
             cachedIBs.Clear();
             currentDayStatus = "Live: Initializing...";
             historyStatus = "History: Initializing...";
+            aiAdvice = "AI Advice: Waiting for 10:00 AM...";
             base.OnInit();
         }
 
@@ -131,6 +145,15 @@ namespace CustomStrategies
             TimeSpan ibStartTime = new TimeSpan(9, 30, 0);
             TimeSpan ibEndTime = ibStartTime.Add(TimeSpan.FromMinutes(this.IBDurationMinutes));
             bool isIBPhase = currentTime >= ibStartTime && currentTime < ibEndTime;
+            
+            // --- EXPLICIT SESSION RESET (FLAW #1 FIX) ---
+            if (istTime.Date != lastSessionDate)
+            {
+                this.ibEngine = new InitialBalanceEngine(); // Re-instantiate the engine to clear any internal buffers
+                this.lastSessionDate = istTime.Date;
+                // Note: cachedIBs shouldn't be wiped here because they are drawn on the chart. 
+                // Only wipe the engine calculating the NEW IB.
+            }
 
             if (isIBPhase)
             {
@@ -141,6 +164,11 @@ namespace CustomStrategies
 
             if (currentTime >= ibEndTime && (!isIBCalculated || lastCalculatedDate != istTime.Date))
             {
+                if (lastCalculatedDate != istTime.Date)
+                {
+                    hasSentToCogneeToday = false;
+                }
+
                 if (ibEngine.CalculateIB(this.HistoricalData, this.Symbol, istTime, this.IBDurationMinutes, ProfileStepTicks, 40, out MarketData md, out bool isPrecise, this.LvnThreshold, this.Hvn2MinRatio))
                 {
                     TimeZoneInfo istTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
@@ -152,7 +180,48 @@ namespace CustomStrategies
                     
                     isIBCalculated = true;
                     lastCalculatedDate = istTime.Date;
+
+                    // FIRE WEBHOOK TO COGNEE (Phase 2.1)
+                    if (this.EnableCogneeWebhook && !hasSentToCogneeToday)
+                    {
+                        hasSentToCogneeToday = true;
+                        
+                        aiAdvice = "AI Advice: Analyzing...";
+                        
+                        Task.Run(async () => {
+                            string advice = await global::FVP_IB_Strategy.Calculations.ReportExporter.AnalyzeSetupAsync(
+                                this.Symbol.Name, 
+                                istTime, 
+                                md.CurrentShape.ToString(), 
+                                md.IB_HVN1.ToString(), 
+                                double.IsNaN(md.IB_HVN2) ? "-" : md.IB_HVN2.ToString(), 
+                                double.IsNaN(md.IB_LVN) ? "-" : md.IB_LVN.ToString(), 
+                                md.IB_High, 
+                                md.IB_Low, 
+                                md.IB_POC, 
+                                md.IB_VAH, 
+                                md.IB_VAL, 
+                                this.EnableCogneeWebhook);
+                                
+                            this.aiAdvice = advice;
+                        });
+                    }
                 }
+            }
+
+            // CONTINUOUS SIMULATION UPDATE FOR ALL OPEN SIGNALS (LIVE & REPLAY STREAMING)
+            TimeSpan ibStartTimeCont = new TimeSpan(9, 30, 0);
+            TimeSpan ibEndTimeCont = ibStartTimeCont.Add(TimeSpan.FromMinutes(this.IBDurationMinutes));
+            ExecutionSimulator continuousSim = new ExecutionSimulator();
+            TimeZoneInfo istTzCont = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+            
+            foreach (var ib in cachedIBs.Where(i => i.Signal != null && (i.Signal.Status == "Waiting" || i.Signal.Status == "In Trade")))
+            {
+                MarketData dummyMd = new MarketData();
+                dummyMd.Signal = ib.Signal;
+                dummyMd.LastCalculatedDate = TimeZoneInfo.ConvertTimeFromUtc(ib.ExecutionStartUtc, istTzCont).Date;
+
+                continuousSim.SimulateExecution(dummyMd, this.HistoricalData, ibEndTimeCont, EndTradingTime, istTzCont);
             }
         }
 
@@ -445,9 +514,10 @@ namespace CustomStrategies
                         DailyIB liveIb = cachedIBs.FirstOrDefault(i => !i.IsHistorical);
                         bool hasSignal = liveIb != null && liveIb.Signal != null && liveIb.CurrentShape != VolumeProfileShape.Unknown;
                         
-                        int tableWidth = 200;
+                        int tableWidth = 230; // Increased width for AI advice
                         int tableHeight = hasSignal ? 150 : 35;
                         if (ShowCacheInfo) tableHeight += 45;
+                        if (this.EnableCogneeWebhook) tableHeight += 25; // Space for AI Advice
                         
                         int tableX = mainWindow.ClientRectangle.Right - tableWidth - 10;
                         int tableY = 80;
@@ -487,6 +557,12 @@ namespace CustomStrategies
                         {
                             graphics.DrawString(currentDayStatus, font, debugBrush, tableX + 10, cacheY);
                             graphics.DrawString(historyStatus, font, textBrush, tableX + 10, cacheY + 20);
+                            cacheY += 40;
+                        }
+
+                        if (this.EnableCogneeWebhook)
+                        {
+                            graphics.DrawString(aiAdvice, font, new SolidBrush(Color.Gold), tableX + 10, cacheY + 5);
                         }
                     }
                 }

@@ -105,9 +105,10 @@ namespace CustomStrategies.Calculations
                 else
                 {
                     // TIE-BREAKER CRASH FIX:
-                    // If exactly equal, deterministically favor upward expansion
+                    // If exactly equal, expand symmetrically
                     upIdx++;
-                    currentAreaVol += upVol;
+                    downIdx--;
+                    currentAreaVol += (upVol + downVol);
                 }
             }
 

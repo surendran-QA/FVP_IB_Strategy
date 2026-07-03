@@ -25,12 +25,39 @@ namespace CustomStrategies.Execution
             try { currentPrice = context.CurrentSymbol.Last; } catch { }
 
             OrderTypeBehavior requiredBehavior = OrderTypeBehavior.Limit;
+            
+            // B-SHAPE SLIPPAGE FIX: Strict dynamic evaluation for breached limits
+            double slippageTolerance = 20.0 * context.CurrentSymbol.TickSize; // Max 20 ticks slippage
             if (side == Side.Buy && currentPrice < entryPrice)
+            {
+                if (Math.Abs(entryPrice - currentPrice) > slippageTolerance)
+                {
+                    context.LogAction?.Invoke($"[SLIPPAGE ABORT] Buy Limit breached by {Math.Abs(entryPrice - currentPrice)} (Tolerance: {slippageTolerance}). Aborting entry.", StrategyLoggingLevel.Error);
+                    context.SetWaitOpenPosition?.Invoke(false);
+                    return;
+                }
                 requiredBehavior = OrderTypeBehavior.Stop;
+            }
             else if (side == Side.Sell && currentPrice > entryPrice)
+            {
+                if (Math.Abs(currentPrice - entryPrice) > slippageTolerance)
+                {
+                    context.LogAction?.Invoke($"[SLIPPAGE ABORT] Sell Limit breached by {Math.Abs(currentPrice - entryPrice)} (Tolerance: {slippageTolerance}). Aborting entry.", StrategyLoggingLevel.Error);
+                    context.SetWaitOpenPosition?.Invoke(false);
+                    return;
+                }
                 requiredBehavior = OrderTypeBehavior.Stop;
+            }
 
             string determinedOrderTypeId = Core.Instance.OrderTypes.FirstOrDefault(x => x.ConnectionId == context.CurrentSymbol.ConnectionId && x.Behavior == requiredBehavior)?.Id ?? context.OrderTypeId;
+            
+            var resolvedType = Core.Instance.OrderTypes.FirstOrDefault(x => x.Id == determinedOrderTypeId);
+            if (resolvedType != null && resolvedType.Behavior != requiredBehavior)
+            {
+                context.LogAction?.Invoke($"[LIMIT ORDER BUG PREVENTION] Required {requiredBehavior} but got {resolvedType.Behavior}. Aborting to prevent instant market fills.", StrategyLoggingLevel.Error);
+                context.SetWaitOpenPosition?.Invoke(false);
+                return;
+            }
 
             var placeOrderReq = new PlaceOrderRequestParameters()
             {
