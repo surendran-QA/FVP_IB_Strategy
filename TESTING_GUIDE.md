@@ -20,17 +20,18 @@ To run this strategy inside Quantower, it must be compiled into a single `.dll` 
 You can evaluate the system using Quantower's **Market Replay Mode** to fast-forward historical data. You have two options depending on how deep you want to test.
 
 ### Option A: The Lightweight Approach (Using the Indicator)
-If you want to train the AI and verify the API connection quickly without simulating full automated trade execution, use the visual indicator.
+If you want to verify the API connection quickly without simulating full automated trade execution, use the visual indicator.
 
 1. **Start the AI Backend:** Ensure the Python `START_COGNEE_BACKEND.bat` is running in the other repository.
 2. **Open Quantower** and launch a chart (e.g., NQ futures).
 3. **Open the Market Replay Panel**, select your historical dates, and click Play.
 4. **Attach the Indicator:** Right-click the chart -> Indicators -> Add `FVP_IB_Visualizer`. 
 5. **Configuration:** Ensure **Enable Webhook** is checked `true` in the indicator settings.
-6. **Result:** As the replay fast-forwards and the Initial Balance completes each day, the indicator will instantly fire Phase 1 setups (`/analyze`) to the Python backend to retrieve AI trade suggestions.
+6. **Result:** As the replay fast-forwards, the indicator will instantly fire Phase 1 setups (`/analyze`) to the Python backend.
+*(Note: Because the indicator does not execute trades, it will NOT send Phase 2 Outcome payloads. The AI will only learn market structures, not win/loss outcomes).*
 
-### Option B: The Full Automated Approach (Using the Strategy)
-If you want to simulate live automated execution from entry to exit:
+### Option B: The Full Automated Approach (Using the Strategy) - **RECOMMENDED FOR AI TRAINING**
+If you want to fully train the AI's memory graph with trade outcomes (Entry, TP, SL, Exit Reasons):
 
 1. Follow steps 1-3 above.
 2. **Attach the Strategy:** Open the Strategy Runner panel, select `FVP_IB_Strategy`, and attach it to your chart. Ensure **Enable Webhook** is `true`.
