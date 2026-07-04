@@ -64,3 +64,17 @@ When advancing to a new Phase of the roadmap (e.g., Phase 1 to Phase 2), you MUS
   1. The endpoint must dump the payload into an `asyncio.Queue` (or a Write-Ahead Log folder) and immediately return a `200 OK` to prevent blocking the client.
   2. Implement a dedicated `asyncio.create_task()` Background Worker to consume the queue/log.
   3. The Background Worker MUST enforce a strict delay (e.g., `await asyncio.sleep(20)`) between processing each payload to account for the multiple LLM requests triggered by `cognify()` and remain safely under the LLM's RPM limits.
+
+## AI Payload Lifecycle (The 2 Phases)
+When managing a trade's lifecycle, the C# strategy must strictly limit its communication with the Cognee AI backend to a **2-Phase Model** to prevent API spam and rate limiting. Do not stream live trade data.
+
+1. **Phase 1: Pre-Trade Query (`/analyze`)**
+   - **Trigger:** Fired immediately when the Initial Balance (IB) range/shape is confirmed.
+   - **Action:** Send the setup data to the AI to retrieve a probability score and trade suggestion.
+
+2. **Phase 2: Post-Trade Ingestion (`/memory`)**
+   - **Trigger:** Fired ONLY when the setup's entire lifecycle terminates. This occurs under three strict conditions:
+     1. **Triggered Trade:** Sent immediately upon hitting Take Profit (TP), Stop Loss (SL), or an EOD force-close.
+     2. **Un-Triggered Trade:** Sent at session close (1:30 AM IST) when pending limit orders are swept/cancelled.
+     3. **Early Termination (Data Flush):** Sent if the user manually stops the strategy or closes Quantower early (caught via the `OnStop()` method).
+   - **Action:** Combine the Phase 1 setup data with the final execution outcomes into a single payload, sending it to the AI for permanent graph ingestion.

@@ -80,6 +80,7 @@ namespace CustomStrategies.Calculations
             }
 
             data.IB_POC = sortedProfile[pocIndex].Key;
+            data.IB_TotalVolume = totalVol;
             double valueAreaVol = totalVol * 0.70;
             double currentAreaVol = maxVolume;
             int upIdx = pocIndex;

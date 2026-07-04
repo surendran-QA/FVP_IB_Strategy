@@ -189,7 +189,7 @@ namespace CustomStrategies
                         aiAdvice = "AI Advice: Analyzing...";
                         
                         Task.Run(async () => {
-                            string advice = await global::FVP_IB_Strategy.Calculations.ReportExporter.AnalyzeSetupAsync(
+                            string advice = await global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AnalyzeSetupAsync(
                                 this.Symbol.Name, 
                                 istTime, 
                                 md.CurrentShape.ToString(), 
@@ -201,6 +201,7 @@ namespace CustomStrategies
                                 md.IB_POC, 
                                 md.IB_VAH, 
                                 md.IB_VAL, 
+                                md.IB_TotalVolume,
                                 this.EnableCogneeWebhook);
                                 
                             this.aiAdvice = advice;

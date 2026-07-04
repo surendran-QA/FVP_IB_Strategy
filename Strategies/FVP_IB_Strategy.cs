@@ -364,7 +364,7 @@ namespace CustomStrategies
                 global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, sEntryFill, sExitTime, obj.Symbol.Name, obj.Side.ToString(), obj.Quantity, entryPrice.ToString(), exitPrice.ToString(), Math.Round(pnl, 2).ToString(), status, result, shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                 
                 string execution = obj.Side.ToString() + " at " + (marketData?.Signal != null && Math.Abs(marketData.Signal.EntryPrice - marketData.IB_LVN) < obj.Symbol.TickSize*10 ? "LVN" : "POC");
-                global::FVP_IB_Strategy.Calculations.ReportExporter.AppendCogneePayload(
+                global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
                     activeCogneePayloadsPath, 
                     obj.Symbol.Name, 
                     entryTimeIst, 
@@ -380,6 +380,7 @@ namespace CustomStrategies
                     marketData?.IB_POC ?? double.NaN, 
                     marketData?.IB_VAH ?? double.NaN, 
                     marketData?.IB_VAL ?? double.NaN, 
+                    marketData?.IB_TotalVolume ?? 0,
                     entryPrice, 
                     marketData?.Signal?.StopLoss ?? double.NaN, 
                     marketData?.Signal?.TakeProfit ?? double.NaN, 
@@ -570,7 +571,7 @@ namespace CustomStrategies
                         global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeCsvFilePath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, order.Side.ToString(), order.TotalQuantity, entryPrice.ToString(), "-", "0", "Pending (Not Triggered)", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                         global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, order.Side.ToString(), order.TotalQuantity, entryPrice.ToString(), "-", "0", "Pending (Not Triggered)", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                         
-                        global::FVP_IB_Strategy.Calculations.ReportExporter.AppendCogneePayload(
+                        global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
                             activeCogneePayloadsPath, 
                             this.CurrentSymbol.Name, 
                             orderPlacedIst, 
@@ -586,6 +587,7 @@ namespace CustomStrategies
                             marketData?.IB_POC ?? double.NaN, 
                             marketData?.IB_VAH ?? double.NaN, 
                             marketData?.IB_VAL ?? double.NaN, 
+                            marketData?.IB_TotalVolume ?? 0,
                             entryPrice, 
                             marketData?.Signal?.StopLoss ?? double.NaN, 
                             marketData?.Signal?.TakeProfit ?? double.NaN, 
@@ -629,7 +631,7 @@ namespace CustomStrategies
                             this.Log($"FADE Signal Generated (No Trade Day). Logging to AllSignals CSV for ML Training.", StrategyLoggingLevel.Trading);
                             global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, "FADE", 1, "-", "-", "0", "No Signal", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                             
-                            global::FVP_IB_Strategy.Calculations.ReportExporter.AppendCogneePayload(
+                            global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
                                 activeCogneePayloadsPath, 
                                 this.CurrentSymbol.Name, 
                                 estTime, 
@@ -645,6 +647,7 @@ namespace CustomStrategies
                                 marketData.IB_POC, 
                                 marketData.IB_VAH, 
                                 marketData.IB_VAL, 
+                                marketData.IB_TotalVolume,
                                 marketData.Signal.EntryPrice, 
                                 marketData.Signal.StopLoss, 
                                 marketData.Signal.TakeProfit, 

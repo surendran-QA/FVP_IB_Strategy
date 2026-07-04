@@ -75,6 +75,7 @@ namespace CustomStrategies.Calculations
             }
 
             data.IB_POC = sortedProfile[pocIndex].Key;
+            data.IB_TotalVolume = totalVol;
             
             // Note: Caller is responsible for Shape Detection and Value Area Calculation.
             // Or we can calculate Value Area here, since this is the Profile Calculator.

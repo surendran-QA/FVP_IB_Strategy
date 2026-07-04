@@ -8,6 +8,7 @@ namespace CustomStrategies
     {
         public double IB_High { get; set; } = double.MinValue;
         public double IB_Low { get; set; } = double.MaxValue;
+        public double IB_TotalVolume { get; set; } = 0;
         public double IB_POC { get; set; } = 0;
         public double IB_VAH { get; set; } = 0;
         public double IB_VAL { get; set; } = 0;
