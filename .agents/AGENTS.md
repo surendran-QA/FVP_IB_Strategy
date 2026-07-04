@@ -78,3 +78,11 @@ When managing a trade's lifecycle, the C# strategy must strictly limit its commu
      2. **Un-Triggered Trade:** Sent at session close (1:30 AM IST) when pending limit orders are swept/cancelled.
      3. **Early Termination (Data Flush):** Sent if the user manually stops the strategy or closes Quantower early (caught via the `OnStop()` method).
    - **Action:** Combine the Phase 1 setup data with the final execution outcomes into a single payload, sending it to the AI for permanent graph ingestion.
+
+## Repository Structure (Polyrepo Enforcement)
+- **No Monorepos:** When developing external backend services (e.g., Python FastAPI servers, Cognee engines) that communicate with the Quantower Strategy, NEVER place them inside the C# Strategy directory. 
+- **Isolation:** The C# root directory must remain strictly dedicated to Quantower code and its compilation output. External services must be created in sibling directories outside the C# root and tracked in their own separate Git repositories.
+- **Hackathon Polyrepo Memory (CRITICAL):** The project is split into two distinct repositories that must be developed in parallel:
+  1. **C# Trading Engine:** `C:\Surendran\Fixed volume profile with congee\FVP_IB_Strategy` (Active branch: `feature/phase2`)
+  2. **Python Cognee AI Backend:** `C:\Surendran\Fixed volume profile with congee\FVP_IB_Cognee_Backend` (Active branch: `feature/phase2_congee`)
+  Whenever modifying the Phase 2 AI integration, you MUST check BOTH folders to ensure the C# JSON payloads precisely match the Python Pydantic/FastAPI expected schemas.
