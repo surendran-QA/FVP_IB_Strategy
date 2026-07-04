@@ -14,6 +14,7 @@ namespace CustomStrategies.Calculations
         public DateTime? EntryTime { get; set; }
         public DateTime? ExitTime { get; set; }
         public string ExitReason { get; set; }
+        public bool IsMemoryPayloadSent { get; set; } = false;
     }
 
     public class SignalGenerator

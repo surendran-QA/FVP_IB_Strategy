@@ -223,6 +223,40 @@ namespace CustomStrategies
                 dummyMd.LastCalculatedDate = TimeZoneInfo.ConvertTimeFromUtc(ib.ExecutionStartUtc, istTzCont).Date;
 
                 continuousSim.SimulateExecution(dummyMd, this.HistoricalData, ibEndTimeCont, EndTradingTime, istTzCont);
+                
+                if (ib.Signal.Status == "Closed" && !ib.Signal.IsMemoryPayloadSent && this.EnableCogneeWebhook)
+                {
+                    ib.Signal.IsMemoryPayloadSent = true;
+                    string execution = ib.Signal.PreferredSide + " at " + (Math.Abs(ib.Signal.EntryPrice - ib.LVN) < 2.5 ? "LVN" : "POC");
+                    double exitPrice = ib.Signal.ExitReason == "TP Hit" ? ib.Signal.TakeProfit : ib.Signal.StopLoss;
+                    double pnl = ib.Signal.PreferredSide == "BUY" ? (exitPrice - ib.Signal.EntryPrice) : (ib.Signal.EntryPrice - exitPrice);
+                    string status = ib.Signal.ExitReason ?? "Closed";
+                    string result = $"{(pnl > 0 ? "+" : "")}{Math.Round(pnl, 2)} pts";
+                    
+                    global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
+                        @"C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\AI_Global_Events.log",
+                        this.Symbol.Name,
+                        ib.Signal.EntryTime ?? DateTime.UtcNow,
+                        ib.CurrentShape.ToString(),
+                        execution,
+                        status,
+                        result,
+                        ib.POC.ToString(),
+                        double.IsNaN(ib.HVN2) ? "-" : ib.HVN2.ToString(),
+                        double.IsNaN(ib.LVN) ? "-" : ib.LVN.ToString(),
+                        ib.High,
+                        ib.Low,
+                        ib.POC,
+                        ib.VAH,
+                        ib.VAL,
+                        0, // IB_TotalVolume
+                        ib.Signal.EntryPrice,
+                        ib.Signal.StopLoss,
+                        ib.Signal.TakeProfit,
+                        this.EnableCogneeWebhook,
+                        this.AutoTriggerGemini
+                    );
+                }
             }
         }
 

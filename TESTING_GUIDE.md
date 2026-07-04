@@ -19,18 +19,17 @@ To run this strategy inside Quantower, it must be compiled into a single `.dll` 
 
 You can evaluate the system using Quantower's **Market Replay Mode** to fast-forward historical data. You have two options depending on how deep you want to test.
 
-### Option A: The Lightweight Approach (Using the Indicator)
-If you want to verify the API connection quickly without simulating full automated trade execution, use the visual indicator.
+### Option A: The Lightweight Approach (Using the Indicator) - **RECOMMENDED FOR HACKATHON**
+If you want to train the AI and verify the API connection quickly without dealing with Strategy execution complexities, use the visual indicator. The Indicator has a built-in mathematical trade simulator that perfectly replicates trade entries/exits without firing real broker orders!
 
 1. **Start the AI Backend:** Ensure the Python `START_COGNEE_BACKEND.bat` is running in the other repository.
 2. **Open Quantower** and launch a chart (e.g., NQ futures).
 3. **Open the Market Replay Panel**, select your historical dates, and click Play.
 4. **Attach the Indicator:** Right-click the chart -> Indicators -> Add `FVP_IB_Visualizer`. 
 5. **Configuration:** Ensure **Enable Webhook** is checked `true` in the indicator settings.
-6. **Result:** As the replay fast-forwards, the indicator will instantly fire Phase 1 setups (`/analyze`) to the Python backend.
-*(Note: Because the indicator does not execute trades, it will NOT send Phase 2 Outcome payloads. The AI will only learn market structures, not win/loss outcomes).*
+6. **Result:** As the replay fast-forwards, the indicator will instantly fire Phase 1 setups (`/analyze`) to the Python backend. Furthermore, as its internal engine simulates the trade, it will also fire the final Phase 2 Outcome payloads (`/memory`) exactly like the live strategy would! This fully trains the AI on both setups and win/loss outcomes safely.
 
-### Option B: The Full Automated Approach (Using the Strategy) - **RECOMMENDED FOR AI TRAINING**
+### Option B: The Full Live Broker Approach (Using the Strategy)
 If you want to fully train the AI's memory graph with trade outcomes (Entry, TP, SL, Exit Reasons):
 
 1. Follow steps 1-3 above.
