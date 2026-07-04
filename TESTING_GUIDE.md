@@ -13,19 +13,27 @@ To run this strategy inside Quantower, it must be compiled into a single `.dll` 
 
 > [!WARNING]
 > **Strict Deployment Rule**
-> NEVER place `.cs` (C# source files) inside the Quantower `Strategies` folder. Ensure the folder is completely clean of everything except the `.dll` files to avoid internal compilation conflicts.
+> NEVER place `.cs` (C# source files) inside the Quantower `Strategies` or `Indicators` folders. Ensure the folders are completely clean of everything except the `.dll` files to avoid internal compilation conflicts.
 
-## Testing the Strategy (Market Replay Mode)
+## Testing the System (Market Replay Mode)
 
-For hackathon judges or rapid testing, you do not need to wait for a live market session. You can test the entire system, including the AI integration, instantly using Quantower's **Market Replay Mode**.
+You can evaluate the system using Quantower's **Market Replay Mode** to fast-forward historical data. You have two options depending on how deep you want to test.
+
+### Option A: The Lightweight Approach (Using the Indicator)
+If you want to train the AI and verify the API connection quickly without simulating full automated trade execution, use the visual indicator.
 
 1. **Start the AI Backend:** Ensure the Python `START_COGNEE_BACKEND.bat` is running in the other repository.
 2. **Open Quantower** and launch a chart (e.g., NQ futures).
-3. **Open the Market Replay Panel** and select your desired historical dates.
-4. **Attach the Strategy:** Open the Strategy Runner panel, select `FVP_IB_Strategy`, and attach it to your chart.
-5. **Configuration:**
-   - Set the `IB Duration (Minutes)` (default is 30).
-   - Check the **Enable Webhook** parameter to `true`. This is required to send data to the AI.
+3. **Open the Market Replay Panel**, select your historical dates, and click Play.
+4. **Attach the Indicator:** Right-click the chart -> Indicators -> Add `FVP_IB_Visualizer`. 
+5. **Configuration:** Ensure **Enable Webhook** is checked `true` in the indicator settings.
+6. **Result:** As the replay fast-forwards and the Initial Balance completes each day, the indicator will instantly fire Phase 1 setups (`/analyze`) to the Python backend to retrieve AI trade suggestions.
+
+### Option B: The Full Automated Approach (Using the Strategy)
+If you want to simulate live automated execution from entry to exit:
+
+1. Follow steps 1-3 above.
+2. **Attach the Strategy:** Open the Strategy Runner panel, select `FVP_IB_Strategy`, and attach it to your chart. Ensure **Enable Webhook** is `true`.
 6. **Start Replay:** Click Play on the Market Replay panel. 
 
 > [!NOTE]
