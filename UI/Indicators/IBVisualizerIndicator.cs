@@ -103,7 +103,7 @@ namespace CustomStrategies
         
         private List<DailyIB> cachedIBs = new List<DailyIB>();
         private InitialBalanceEngine ibEngine = new InitialBalanceEngine();
-        private static readonly HttpClient httpClient = new HttpClient();
+        private ICogneeIntegrationService cogneeService;
         private bool hasSentToCogneeToday = false;
         private DateTime lastSessionDate = DateTime.MinValue;
         private string aiAdvice = "AI Advice: Waiting for 10:00 AM...";
@@ -119,6 +119,8 @@ namespace CustomStrategies
 
         protected override void OnInit()
         {
+            this.cogneeService = new CogneeIntegrationService();
+
             if (this.DataAggregationMode == 1)
             {
                 try { Core.Instance.VolumeAnalysis.CalculateProfile(this.HistoricalData); }
@@ -132,6 +134,15 @@ namespace CustomStrategies
             historyStatus = "History: Initializing...";
             aiAdvice = "AI Advice: Waiting for 10:00 AM...";
             base.OnInit();
+        }
+
+        protected override void OnClear()
+        {
+            if (this.cogneeService != null && this.cogneeService is IDisposable disposableService)
+            {
+                disposableService.Dispose();
+            }
+            base.OnClear();
         }
 
         protected override void OnUpdate(UpdateArgs args)
@@ -189,22 +200,41 @@ namespace CustomStrategies
                         aiAdvice = "AI Advice: Analyzing...";
                         
                         Task.Run(async () => {
-                            string advice = await global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AnalyzeSetupAsync(
-                                this.Symbol.Name, 
-                                istTime, 
-                                md.CurrentShape.ToString(), 
-                                md.IB_HVN1.ToString(), 
-                                double.IsNaN(md.IB_HVN2) ? "-" : md.IB_HVN2.ToString(), 
-                                double.IsNaN(md.IB_LVN) ? "-" : md.IB_LVN.ToString(), 
-                                md.IB_High, 
-                                md.IB_Low, 
-                                md.IB_POC, 
-                                md.IB_VAH, 
-                                md.IB_VAL, 
-                                md.IB_TotalVolume,
-                                this.EnableCogneeWebhook);
-                                
-                            this.aiAdvice = advice;
+                            if (this.cogneeService != null)
+                            {
+                                string responseStr = await this.cogneeService.AnalyzeSetupAsync(
+                                    this.Symbol.Name, 
+                                    istTime, 
+                                    md.CurrentShape.ToString(), 
+                                    md.IB_HVN1.ToString(), 
+                                    double.IsNaN(md.IB_HVN2) ? "-" : md.IB_HVN2.ToString(), 
+                                    double.IsNaN(md.IB_LVN) ? "-" : md.IB_LVN.ToString(), 
+                                    md.IB_High, 
+                                    md.IB_Low, 
+                                    md.IB_POC, 
+                                    md.IB_VAH, 
+                                    md.IB_VAL, 
+                                    md.IB_TotalVolume,
+                                    this.EnableCogneeWebhook);
+                                    
+                                string parsedScore = "50";
+                                string parsedProb = "50%";
+                                try 
+                                {
+                                    using (System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(responseStr))
+                                    {
+                                        if (doc.RootElement.TryGetProperty("ai_score", out var scoreElement))
+                                            parsedScore = scoreElement.GetString() ?? "50";
+                                        if (doc.RootElement.TryGetProperty("win_probability", out var probElement))
+                                            parsedProb = probElement.GetString() ?? "50%";
+                                    }
+                                    this.aiAdvice = $"AI Advice: Score {parsedScore} | Probability {parsedProb}";
+                                }
+                                catch
+                                {
+                                    this.aiAdvice = "AI Advice: JSON Parse Error";
+                                }
+                            }
                         });
                     }
                 }
@@ -233,8 +263,9 @@ namespace CustomStrategies
                     string status = ib.Signal.ExitReason ?? "Closed";
                     string result = $"{(pnl > 0 ? "+" : "")}{Math.Round(pnl, 2)} pts";
                     
-                    global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
-                        @"C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\AI_Global_Events.log",
+                    string logPath = global::FVP_IB_Strategy.Config.ProjectPaths.GetLogFilePath();
+                    this.cogneeService?.AppendCogneePayload(
+                        logPath,
                         this.Symbol.Name,
                         ib.Signal.EntryTime ?? DateTime.UtcNow,
                         ib.CurrentShape.ToString(),
@@ -608,7 +639,7 @@ namespace CustomStrategies
         {
             try
             {
-                string csvFilePath = @"C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\IndicatorReport.csv";
+                string csvFilePath = System.IO.Path.Combine(global::FVP_IB_Strategy.Config.ProjectPaths.GetBaseStrategyDirectory(), "IndicatorReport.csv");
                 global::FVP_IB_Strategy.Calculations.ReportExporter.InitializeReport(csvFilePath);
 
                 // Sort cached IBs by date ascending

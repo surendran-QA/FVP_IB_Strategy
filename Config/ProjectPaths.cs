@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using TradingPlatform.BusinessLayer;
 
@@ -9,14 +10,58 @@ namespace FVP_IB_Strategy.Config
         /// Dynamically retrieves the base directory for the strategy's output files.
         /// This ensures the path works across different Quantower installations.
         /// </summary>
-        /// <summary>
-        /// Centralized base directory for the strategy's output files.
-        /// </summary>
-        public static readonly string BaseDirectory = @"C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy";
-        
         public static string GetBaseStrategyDirectory()
         {
-            return BaseDirectory;
+            try
+            {
+                // ATTEMPT 1: Native Quantower API (Safest if Core is initialized)
+                if (Core.Instance != null && Core.Instance.Environment != null && !string.IsNullOrEmpty(Core.Instance.Environment.AppDirectory))
+                {
+                    return Path.Combine(Core.Instance.Environment.AppDirectory, "Settings", "Scripts", "Strategies", "FVP_IB_Strategy");
+                }
+            }
+            catch { /* Ignore if Core isn't fully spun up */ }
+
+            try
+            {
+                // ATTEMPT 2: Executing Assembly Location Fallback with Aggressive Stripping
+                string exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                if (!string.IsNullOrEmpty(exePath))
+                {
+                    string dir = Path.GetDirectoryName(exePath);
+                    // Strip \Compiled if Quantower shadow-copied it
+                    int compiledIdx = dir.IndexOf(@"\Settings\Scripts\Compiled", StringComparison.OrdinalIgnoreCase);
+                    if (compiledIdx > 0)
+                    {
+                        dir = dir.Substring(0, compiledIdx);
+                        return Path.Combine(dir, "Settings", "Scripts", "Strategies", "FVP_IB_Strategy");
+                    }
+                }
+            }
+            catch { /* Ignore reflection errors */ }
+
+            try
+            {
+                // ATTEMPT 3: AppDomain BaseDirectory with Aggressive Stripping
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                int compiledIdx2 = baseDir.IndexOf(@"\Settings\Scripts\Compiled", StringComparison.OrdinalIgnoreCase);
+                if (compiledIdx2 > 0)
+                {
+                    baseDir = baseDir.Substring(0, compiledIdx2);
+                }
+                
+                return Path.Combine(baseDir, "Settings", "Scripts", "Strategies", "FVP_IB_Strategy");
+            }
+            catch
+            {
+                // FINAL FALLBACK
+                return @"C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy";
+            }
+        }
+        
+        public static string GetLogFilePath()
+        {
+            return Path.Combine(GetBaseStrategyDirectory(), "AI_Global_Events.log");
         }
     }
 }

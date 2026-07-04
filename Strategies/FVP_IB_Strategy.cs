@@ -68,6 +68,7 @@ namespace CustomStrategies
         private InitialBalanceEngine ibEngine;
         private OrderManager orderManager;
         private TradingContext tradingContext;
+        private ICogneeIntegrationService cogneeService;
 
         private string orderTypeId;
         private string marketOrderTypeId;
@@ -84,6 +85,7 @@ namespace CustomStrategies
         private DateTime currentSimTime = DateTime.MinValue;
         private DateTime lastOrderPlacedTime = DateTime.MinValue;
         private HashSet<string> processedPositionIds = new HashSet<string>();
+        private bool isAwaitingAiScore = false;
 
         private string activeCsvFilePath;
         private string activeAllSignalsCsvPath;
@@ -124,6 +126,7 @@ namespace CustomStrategies
         protected override void OnRun()
         {
             this.waitOpenPosition = false; // FLAW FIX: Must initialize to false to allow the first trade to place!
+            this.isAwaitingAiScore = false;
             this.totalTradesCount = 0;
             this.totalWins = 0;
             this.totalLosses = 0;
@@ -162,6 +165,7 @@ namespace CustomStrategies
             this.marketData = new MarketData();
             this.ibEngine = new InitialBalanceEngine();
             this.orderManager = new OrderManager();
+            this.cogneeService = new CogneeIntegrationService();
 
             this.tradingContext = new TradingContext
             {
@@ -183,6 +187,11 @@ namespace CustomStrategies
             {
                 this.hdm.HistoryItemUpdated -= Hdm_HistoryItemUpdated;
                 this.hdm.Dispose();
+            }
+
+            if (this.cogneeService != null && this.cogneeService is IDisposable disposableService)
+            {
+                disposableService.Dispose();
             }
 
             global::FVP_IB_Strategy.Calculations.ReportExporter.FlushReports(this.activeCsvFilePath, this.activeAllSignalsCsvPath);
@@ -364,7 +373,7 @@ namespace CustomStrategies
                 global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, sEntryFill, sExitTime, obj.Symbol.Name, obj.Side.ToString(), obj.Quantity, entryPrice.ToString(), exitPrice.ToString(), Math.Round(pnl, 2).ToString(), status, result, shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                 
                 string execution = obj.Side.ToString() + " at " + (marketData?.Signal != null && Math.Abs(marketData.Signal.EntryPrice - marketData.IB_LVN) < obj.Symbol.TickSize*10 ? "LVN" : "POC");
-                global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
+                this.cogneeService?.AppendCogneePayload(
                     activeCogneePayloadsPath, 
                     obj.Symbol.Name, 
                     entryTimeIst, 
@@ -571,7 +580,7 @@ namespace CustomStrategies
                         global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeCsvFilePath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, order.Side.ToString(), order.TotalQuantity, entryPrice.ToString(), "-", "0", "Pending (Not Triggered)", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                         global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, order.Side.ToString(), order.TotalQuantity, entryPrice.ToString(), "-", "0", "Pending (Not Triggered)", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                         
-                        global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
+                        this.cogneeService?.AppendCogneePayload(
                             activeCogneePayloadsPath, 
                             this.CurrentSymbol.Name, 
                             orderPlacedIst, 
@@ -597,7 +606,7 @@ namespace CustomStrategies
                     return;
                 }
 
-                if (positions.Any() || waitOpenPosition || hasTradedToday) return;
+                if (positions.Any() || waitOpenPosition || hasTradedToday || isAwaitingAiScore) return;
 
                 // Place Limit Order when IB is calculated and execution phase begins
                 if (currentTime >= StartTradingTime)
@@ -606,11 +615,92 @@ namespace CustomStrategies
                     {
                         if (marketData.Signal.PreferredSide != "FADE")
                         {
-                            this.lastOrderPlacedTime = this.currentSimTime; // Capture order placement time
-                            this.lastTradedDate = currentDate; // Track which date we traded
-                            this.Log($"Triggering Trade Execution: Side={marketData.Signal.PreferredSide}, Entry={marketData.Signal.EntryPrice}", StrategyLoggingLevel.Trading);
-                            orderManager.ExecuteTrade(marketData, tradingContext);
-                            hasTradedToday = true;
+                            if (this.EnableCogneeWebhook)
+                            {
+                                this.isAwaitingAiScore = true;
+                                this.Log("Consulting AI memory graph for trade consensus...", StrategyLoggingLevel.Trading);
+                                
+                                System.Threading.Tasks.Task.Run(async () => {
+                                    try 
+                                    {
+                                        string response = await this.cogneeService.AnalyzeSetupAsync(
+                                            this.CurrentSymbol.Name, estTime, marketData.CurrentShape.ToString(), 
+                                            marketData.IB_HVN1.ToString(), 
+                                            double.IsNaN(marketData.IB_HVN2) ? "-" : marketData.IB_HVN2.ToString(), 
+                                            double.IsNaN(marketData.IB_LVN) ? "-" : marketData.IB_LVN.ToString(), 
+                                            marketData.IB_High, marketData.IB_Low, marketData.IB_POC, 
+                                            marketData.IB_VAH, marketData.IB_VAL, marketData.IB_TotalVolume, 
+                                            this.EnableCogneeWebhook
+                                        );
+                                        
+                                        // Strictly-Typed JSON Parsing (ARCH-01 Compliance)
+                                        double winProb = 50; // Fallback
+                                        try 
+                                        {
+                                            using (System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(response))
+                                            {
+                                                if (doc.RootElement.TryGetProperty("win_probability", out var probElement))
+                                                {
+                                                    string probStr = probElement.GetString()?.Replace("%", "").Trim();
+                                                    if (double.TryParse(probStr, out double parsedProb))
+                                                    {
+                                                        winProb = parsedProb;
+                                                    }
+                                                }
+                                            }
+                                        } 
+                                        catch (System.Text.Json.JsonException jsonEx) 
+                                        { 
+                                            this.Log($"AI JSON Parse Error: {jsonEx.Message}. Using baseline 50%.", StrategyLoggingLevel.Error);
+                                        }
+
+                                        if (winProb < 40)
+                                        {
+                                            this.Log($"AI VETO (Prob: {winProb}%): Mathematical setup overridden due to poor historical context. Logging FADE.", StrategyLoggingLevel.Trading);
+                                            
+                                            // Act as a FADE day and log it for ML
+                                            this.lastTradedDate = currentDate;
+                                            string dayOfWeek = estTime.DayOfWeek.ToString();
+                                            string sOrderPlaced = estTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                            string shapeStr = marketData.CurrentShape.ToString();
+                                            string ibHigh = marketData.IB_High.ToString();
+                                            string ibLow = marketData.IB_Low.ToString();
+                                            string ibPoc = marketData.IB_POC.ToString();
+                                            string ibVah = marketData.IB_VAH.ToString();
+                                            string ibVal = marketData.IB_VAL.ToString();
+                                            string ibHvn1 = marketData.IB_HVN1.ToString();
+                                            string ibHvn2 = (marketData.CurrentShape == VolumeProfileShape.BShape && !double.IsNaN(marketData.IB_HVN2)) ? marketData.IB_HVN2.ToString() : "-";
+                                            string ibLvn = (marketData.CurrentShape == VolumeProfileShape.BShape && !double.IsNaN(marketData.IB_LVN)) ? marketData.IB_LVN.ToString() : "-";
+
+                                            global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, "AI_VETO", 1, "-", "-", "0", "AI Vetoed", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
+                                            
+                                            // Write to Cognee Webhook too
+                                            this.cogneeService?.AppendCogneePayload(
+                                                activeCogneePayloadsPath, this.CurrentSymbol.Name, estTime, shapeStr, "AI_VETO", "No Signal", "AI Override", ibHvn1, ibHvn2, ibLvn, marketData.IB_High, marketData.IB_Low, marketData.IB_POC, marketData.IB_VAH, marketData.IB_VAL, marketData.IB_TotalVolume, marketData.Signal.EntryPrice, marketData.Signal.StopLoss, marketData.Signal.TakeProfit, this.EnableCogneeWebhook, this.AutoTriggerGemini);
+                                        }
+                                        else
+                                        {
+                                            this.Log($"AI APPROVAL (Prob: {winProb}%): Placing mathematical order.", StrategyLoggingLevel.Trading);
+                                            this.lastOrderPlacedTime = this.currentSimTime;
+                                            this.lastTradedDate = currentDate;
+                                            orderManager.ExecuteTrade(marketData, tradingContext);
+                                        }
+                                        hasTradedToday = true;
+                                    }
+                                    finally 
+                                    {
+                                        this.isAwaitingAiScore = false;
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                this.lastOrderPlacedTime = this.currentSimTime; // Capture order placement time
+                                this.lastTradedDate = currentDate; // Track which date we traded
+                                this.Log($"Triggering Trade Execution: Side={marketData.Signal.PreferredSide}, Entry={marketData.Signal.EntryPrice}", StrategyLoggingLevel.Trading);
+                                orderManager.ExecuteTrade(marketData, tradingContext);
+                                hasTradedToday = true;
+                            }
                         }
                         else
                         {
@@ -631,7 +721,7 @@ namespace CustomStrategies
                             this.Log($"FADE Signal Generated (No Trade Day). Logging to AllSignals CSV for ML Training.", StrategyLoggingLevel.Trading);
                             global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(activeAllSignalsCsvPath, dayOfWeek, sOrderPlaced, "-", "-", this.CurrentSymbol.Name, "FADE", 1, "-", "-", "0", "No Signal", "0 pts", shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
                             
-                            global::FVP_IB_Strategy.Calculations.CogneeIntegrationService.AppendCogneePayload(
+                            this.cogneeService?.AppendCogneePayload(
                                 activeCogneePayloadsPath, 
                                 this.CurrentSymbol.Name, 
                                 estTime, 

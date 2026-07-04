@@ -6,3 +6,13 @@
 Firing non-blocking `PostAsync` HTTP requests over a local REST API during a 50x Market Replay acts as a Denial of Service attack on the Python server. The fast-streaming replay loop launches asynchronous tasks faster than the network/server can process them. Because the C# thread does not wait for a response, the sequence of HTTP packets can arrive out of order, or the local port can become bottlenecked, leading to chaotic race conditions where later logs resolve before earlier ones.
 **Required Architecture:** 
 We must introduce a synchronous throttle or an `await` lock pattern (e.g., a semaphore or blocking queue) specifically designed for the `MemoryBridgeService.cs` (or equivalent HTTP service) whenever the system detects it is operating in Replay or Backtest mode. This ensures chronological integrity of the Memory Engine.
+
+## 2. Monolithic Hardcoded Paths
+**Status:** NEW | **Severity:** MEDIUM
+**Issue:** `ProjectPaths.cs`, `CogneeIntegrationService.cs`, and `IBVisualizerIndicator.cs` hardcode absolute paths pointing to `C:\AMP Quantower\...`. This tightly couples the architecture to a single machine's directory tree.
+**Required Architecture:** Extract all paths to a centralized `Config.json` or dynamic `Environment.CurrentDirectory` resolver.
+
+## 3. Lack of Dependency Injection
+**Status:** NEW | **Severity:** HIGH
+**Issue:** `CogneeIntegrationService.cs` instantiates `HttpClient` and `SemaphoreSlim` as `static readonly` fields inside a static helper class, preventing unit testing and mock injections.
+**Required Architecture:** Decouple these dependencies into a Singleton service that is injected into the execution context.
