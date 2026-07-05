@@ -43,4 +43,4 @@ If you want to fully train the AI's memory graph with trade outcomes (Entry, TP,
 ## Verifying the AI Connection
 
 While the replay is running, you can monitor the following file to see exactly what the C# engine is sending to the Python brain:
-`C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\AI_Global_Events.log`
+`C:\AMP Quantower\Settings\Scripts\Strategies\FVP_IB_Strategy\quant_engine.log`

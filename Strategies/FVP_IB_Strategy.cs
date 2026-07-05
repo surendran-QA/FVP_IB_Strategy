@@ -5,6 +5,7 @@ using System.IO;
 using TradingPlatform.BusinessLayer;
 using CustomStrategies.Calculations;
 using CustomStrategies.Execution;
+using FVP_IB_Strategy.Calculations;
 
 namespace CustomStrategies
 {

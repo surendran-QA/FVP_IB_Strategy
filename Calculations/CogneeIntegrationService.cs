@@ -10,19 +10,19 @@ namespace FVP_IB_Strategy.Calculations
     public interface ICogneeIntegrationService
     {
         Task<string> AnalyzeSetupAsync(
-            string assetName, DateTime barTime, string ibShape, 
-            string ibHvn1, string ibHvn2, string ibLvn, 
-            double ibHigh, double ibLow, double ibPoc, 
-            double ibVah, double ibVal, double totalVolume, 
+            string assetName, DateTime barTime, string ibShape,
+            string ibHvn1, string ibHvn2, string ibLvn,
+            double ibHigh, double ibLow, double ibPoc,
+            double ibVah, double ibVal, double totalVolume,
             bool enableWebhook);
 
         void AppendCogneePayload(
             string filePath, string assetName, DateTime barTime,
-            string ibShape, string tradingSignal, string tradeResult, 
-            string exitReason, string ibHvn1, string ibHvn2, 
-            string ibLvn, double ibHigh, double ibLow, 
-            double ibPoc, double ibVah, double ibVal, 
-            double totalVolume, double entryPrice, double stopLoss, 
+            string ibShape, string tradingSignal, string tradeResult,
+            string exitReason, string ibHvn1, string ibHvn2,
+            string ibLvn, double ibHigh, double ibLow,
+            double ibPoc, double ibVah, double ibVal,
+            double totalVolume, double entryPrice, double stopLoss,
             double takeProfit, bool enableWebhook, bool autoCognify);
     }
 
@@ -45,9 +45,9 @@ namespace FVP_IB_Strategy.Calculations
         }
 
         public async Task<string> AnalyzeSetupAsync(
-            string assetName, 
+            string assetName,
             DateTime barTime,
-            string ibShape, 
+            string ibShape,
             string ibHvn1,
             string ibHvn2,
             string ibLvn,
@@ -72,7 +72,7 @@ namespace FVP_IB_Strategy.Calculations
             string payload = $@"
 [SESSION ID: {sessionId}]
 [MARKET CONTEXT NODE]
-Event Tag: Signal Generated
+Event Tag: PRE_TRADE: Signal Generated
 Day of Week: {dayOfWeek}
 Asset: {assetName}
 Timestamp: {date} {time}
@@ -84,7 +84,7 @@ Session Extremes: IB_High {ibHigh} | IB_Low {ibLow}
 Value Area: VAH {ibVah} ({vahPct}) | POC {ibPoc} ({pocPct}) | VAL {ibVal} ({valPct})
 Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
 ";
-            
+
             // Global Logging
             lock (_lockObj)
             {
@@ -110,11 +110,11 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
 
                 string safePayload = payload.Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "");
                 string jsonPayload = $"{{\"payload\": \"{safePayload}\"}}";
-                
+
                 var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
                 var response = await _httpClient.PostAsync("http://127.0.0.1:8000/analyze", content);
                 string responseStr = await response.Content.ReadAsStringAsync();
-                
+
                 // Return the raw JSON directly to the caller for strictly-typed parsing
                 return responseStr;
             }
@@ -133,12 +133,12 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
         }
 
         public void AppendCogneePayload(
-            string filePath, 
-            string assetName, 
+            string filePath,
+            string assetName,
             DateTime barTime,
-            string ibShape, 
-            string tradingSignal, 
-            string tradeResult, 
+            string ibShape,
+            string tradingSignal,
+            string tradeResult,
             string exitReason,
             string ibHvn1,
             string ibHvn2,
@@ -155,7 +155,8 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
             bool enableWebhook,
             bool autoCognify)
         {
-            Task.Run(async () => {
+            Task.Run(async () =>
+            {
                 string date = barTime.ToString("yyyy-MM-dd");
                 string time = barTime.ToString("HH:mm:ss");
                 string dayOfWeek = barTime.DayOfWeek.ToString();
@@ -166,10 +167,17 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 string vahPct = ibRange > 0 ? ((ibVah - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
                 string valPct = ibRange > 0 ? ((ibVal - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
 
+                string mappedEventTag = exitReason;
+                if (exitReason == "TP Hit") mappedEventTag = "POST_TRADE: Target Achieved";
+                else if (exitReason == "SL Hit") mappedEventTag = "POST_TRADE: Stop Loss Triggered";
+                else if (exitReason == "EOD Flatten") mappedEventTag = "POST_TRADE: EOD Flatten";
+                else if (exitReason == "AI Override") mappedEventTag = "VETO: AI Overridden";
+                else if (exitReason == "Pending Cancelled" || exitReason == "Not Triggered") mappedEventTag = "TRADE_CANCELLED: Entry Not Triggered";
+
                 string payload = $@"
 [SESSION ID: {sessionId}]
 [MARKET CONTEXT NODE]
-Event Tag: {exitReason}
+Event Tag: {mappedEventTag}
 Day of Week: {dayOfWeek}
 Asset: {assetName}
 Timestamp: {date} {time}
@@ -204,7 +212,7 @@ The outcome of the setup was a {tradeResult} due to {exitReason}.
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                         File.AppendAllText(filePath, payload + Environment.NewLine + Environment.NewLine);
-                        
+
                         string logPath = global::FVP_IB_Strategy.Config.ProjectPaths.GetLogFilePath();
                         File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [HIT 2: CONSOLIDATED RECAP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
                     }
@@ -229,7 +237,7 @@ The outcome of the setup was a {tradeResult} due to {exitReason}.
                         string safePayload = payload.Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "");
                         string autoCognifyStr = autoCognify ? "true" : "false";
                         string jsonPayload = $"{{\"payload\": \"{safePayload}\", \"auto_cognify\": {autoCognifyStr}}}";
-                        
+
                         var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
                         await _httpClient.PostAsync("http://127.0.0.1:8000/memory", content);
                     }

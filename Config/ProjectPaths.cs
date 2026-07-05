@@ -12,15 +12,6 @@ namespace FVP_IB_Strategy.Config
         /// </summary>
         public static string GetBaseStrategyDirectory()
         {
-            try
-            {
-                // ATTEMPT 1: Native Quantower API (Safest if Core is initialized)
-                if (Core.Instance != null && Core.Instance.Environment != null && !string.IsNullOrEmpty(Core.Instance.Environment.AppDirectory))
-                {
-                    return Path.Combine(Core.Instance.Environment.AppDirectory, "Settings", "Scripts", "Strategies", "FVP_IB_Strategy");
-                }
-            }
-            catch { /* Ignore if Core isn't fully spun up */ }
 
             try
             {
@@ -61,7 +52,7 @@ namespace FVP_IB_Strategy.Config
         
         public static string GetLogFilePath()
         {
-            return Path.Combine(GetBaseStrategyDirectory(), "AI_Global_Events.log");
+            return Path.Combine(GetBaseStrategyDirectory(), "quant_engine.log");
         }
     }
 }

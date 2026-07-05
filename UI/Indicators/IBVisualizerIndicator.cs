@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Text;
 using TradingPlatform.BusinessLayer;
 using CustomStrategies.Calculations;
+using FVP_IB_Strategy.Calculations;
 
 namespace CustomStrategies
 {
@@ -106,7 +107,7 @@ namespace CustomStrategies
         private ICogneeIntegrationService cogneeService;
         private bool hasSentToCogneeToday = false;
         private DateTime lastSessionDate = DateTime.MinValue;
-        private string aiAdvice = "AI Advice: Waiting for 10:00 AM...";
+        private string quantInsight = "Quant Insight: Waiting for 10:00 AM...";
 
         public IBVisualizerIndicator()
         {
@@ -132,7 +133,7 @@ namespace CustomStrategies
             cachedIBs.Clear();
             currentDayStatus = "Live: Initializing...";
             historyStatus = "History: Initializing...";
-            aiAdvice = "AI Advice: Waiting for 10:00 AM...";
+            quantInsight = "Quant Insight: Waiting for 10:00 AM...";
             base.OnInit();
         }
 
@@ -197,7 +198,7 @@ namespace CustomStrategies
                     {
                         hasSentToCogneeToday = true;
                         
-                        aiAdvice = "AI Advice: Analyzing...";
+                        quantInsight = "Quant Insight: Analyzing...";
                         
                         Task.Run(async () => {
                             if (this.cogneeService != null)
@@ -223,16 +224,16 @@ namespace CustomStrategies
                                 {
                                     using (System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(responseStr))
                                     {
-                                        if (doc.RootElement.TryGetProperty("ai_score", out var scoreElement))
+                                        if (doc.RootElement.TryGetProperty("confidence_score", out var scoreElement))
                                             parsedScore = scoreElement.GetString() ?? "50";
-                                        if (doc.RootElement.TryGetProperty("win_probability", out var probElement))
+                                        if (doc.RootElement.TryGetProperty("historical_win_rate", out var probElement))
                                             parsedProb = probElement.GetString() ?? "50%";
                                     }
-                                    this.aiAdvice = $"AI Advice: Score {parsedScore} | Probability {parsedProb}";
+                                    this.quantInsight = $"Quant Insight: Score {parsedScore} | Probability {parsedProb}";
                                 }
                                 catch
                                 {
-                                    this.aiAdvice = "AI Advice: JSON Parse Error";
+                                    this.quantInsight = "Quant Insight: JSON Parse Error";
                                 }
                             }
                         });
@@ -628,7 +629,7 @@ namespace CustomStrategies
 
                         if (this.EnableCogneeWebhook)
                         {
-                            graphics.DrawString(aiAdvice, font, new SolidBrush(Color.Gold), tableX + 10, cacheY + 5);
+                            graphics.DrawString(quantInsight, font, new SolidBrush(Color.Gold), tableX + 10, cacheY + 5);
                         }
                     }
                 }
