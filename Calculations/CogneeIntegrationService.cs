@@ -91,9 +91,13 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 try
                 {
                     string logPath = global::FVP_IB_Strategy.Config.ProjectPaths.GetLogFilePath();
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath));
                     File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [HIT 1: MORNING SETUP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to write log: {ex.Message}");
+                }
             }
 
             if (!enableWebhook) return "{\"ai_score\": \"50\", \"win_probability\": \"50%\", \"narrative\": \"Webhook Disabled\"}";
@@ -167,12 +171,12 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 string vahPct = ibRange > 0 ? ((ibVah - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
                 string valPct = ibRange > 0 ? ((ibVal - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
 
-                string mappedEventTag = exitReason;
-                if (exitReason == "TP Hit") mappedEventTag = "POST_TRADE: Target Achieved";
-                else if (exitReason == "SL Hit") mappedEventTag = "POST_TRADE: Stop Loss Triggered";
-                else if (exitReason == "EOD Flatten") mappedEventTag = "POST_TRADE: EOD Flatten";
-                else if (exitReason == "AI Override") mappedEventTag = "VETO: AI Overridden";
-                else if (exitReason == "Pending Cancelled" || exitReason == "Not Triggered") mappedEventTag = "TRADE_CANCELLED: Entry Not Triggered";
+                string mappedEventTag = tradeResult;
+                if (tradeResult == "TP Hit") mappedEventTag = "POST_TRADE: Target Achieved";
+                else if (tradeResult == "SL Hit") mappedEventTag = "POST_TRADE: Stop Loss Triggered";
+                else if (tradeResult == "EOD Flatten") mappedEventTag = "POST_TRADE: EOD Flatten";
+                else if (tradeResult == "AI Override") mappedEventTag = "VETO: AI Overridden";
+                else if (tradeResult == "Pending Cancelled" || tradeResult == "Not Triggered") mappedEventTag = "TRADE_CANCELLED: Entry Not Triggered";
 
                 string payload = $@"
 [SESSION ID: {sessionId}]

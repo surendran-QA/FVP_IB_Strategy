@@ -31,6 +31,7 @@ namespace CustomStrategies
         public double Low;
         public double HVN2;
         public double LVN;
+        public double TotalVolume;
         public bool IsPrecise;
         public VolumeProfileShape CurrentShape;
         public Calculations.TradeSignal Signal;
@@ -194,7 +195,7 @@ namespace CustomStrategies
                     lastCalculatedDate = istTime.Date;
 
                     // FIRE WEBHOOK TO COGNEE (Phase 2.1)
-                    if (this.EnableCogneeWebhook && !hasSentToCogneeToday)
+                    if (!hasSentToCogneeToday)
                     {
                         hasSentToCogneeToday = true;
                         
@@ -255,12 +256,12 @@ namespace CustomStrategies
 
                 continuousSim.SimulateExecution(dummyMd, this.HistoricalData, ibEndTimeCont, EndTradingTime, istTzCont);
                 
-                if (ib.Signal.Status == "Closed" && !ib.Signal.IsMemoryPayloadSent && this.EnableCogneeWebhook)
+                if (ib.Signal.Status == "Closed" && !ib.Signal.IsMemoryPayloadSent)
                 {
                     ib.Signal.IsMemoryPayloadSent = true;
                     string execution = ib.Signal.PreferredSide + " at " + (Math.Abs(ib.Signal.EntryPrice - ib.LVN) < 2.5 ? "LVN" : "POC");
                     double exitPrice = ib.Signal.ExitReason == "TP Hit" ? ib.Signal.TakeProfit : ib.Signal.StopLoss;
-                    double pnl = ib.Signal.PreferredSide == "BUY" ? (exitPrice - ib.Signal.EntryPrice) : (ib.Signal.EntryPrice - exitPrice);
+                    double pnl = (ib.Signal.PreferredSide == "BUY" || ib.Signal.PreferredSide == "LONG") ? (exitPrice - ib.Signal.EntryPrice) : (ib.Signal.EntryPrice - exitPrice);
                     string status = ib.Signal.ExitReason ?? "Closed";
                     string result = $"{(pnl > 0 ? "+" : "")}{Math.Round(pnl, 2)} pts";
                     
@@ -281,7 +282,7 @@ namespace CustomStrategies
                         ib.POC,
                         ib.VAH,
                         ib.VAL,
-                        0, // IB_TotalVolume
+                        ib.TotalVolume, // IB_TotalVolume
                         ib.Signal.EntryPrice,
                         ib.Signal.StopLoss,
                         ib.Signal.TakeProfit,
@@ -354,6 +355,7 @@ namespace CustomStrategies
                 Low = md.IB_Low,
                 HVN2 = md.IB_HVN2,
                 LVN = md.IB_LVN,
+                TotalVolume = md.IB_TotalVolume,
                 IsPrecise = isPrecise,
                 CurrentShape = md.CurrentShape,
                 Signal = md.Signal,
@@ -689,7 +691,7 @@ namespace CustomStrategies
                         {
                             double exitPrice = ib.Signal.ExitReason == "TP Hit" ? ib.Signal.TakeProfit : ib.Signal.StopLoss;
                             exitPriceStr = exitPrice.ToString();
-                            points = ib.Signal.PreferredSide == "BUY" ? (exitPrice - ib.Signal.EntryPrice) : (ib.Signal.EntryPrice - exitPrice);
+                            points = (ib.Signal.PreferredSide == "BUY" || ib.Signal.PreferredSide == "LONG") ? (exitPrice - ib.Signal.EntryPrice) : (ib.Signal.EntryPrice - exitPrice);
                             double pnl = points * (this.Symbol != null ? (this.Symbol.TickSize > 0 ? (1.0 / this.Symbol.TickSize) * 0.5 : 1) : 1); // rough estimation for MNQ or general points
                             pnlStr = Math.Round(pnl, 2).ToString();
                             result = $"{(points > 0 ? "+" : "")}{Math.Round(points, 2)} pts";

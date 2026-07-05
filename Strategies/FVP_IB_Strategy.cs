@@ -696,6 +696,17 @@ namespace CustomStrategies
                             }
                             else
                             {
+                                // Call it synchronously just to trigger the local file logging
+                                _ = this.cogneeService.AnalyzeSetupAsync(
+                                    this.CurrentSymbol.Name, estTime, marketData.CurrentShape.ToString(), 
+                                    marketData.IB_HVN1.ToString(), 
+                                    double.IsNaN(marketData.IB_HVN2) ? "-" : marketData.IB_HVN2.ToString(), 
+                                    double.IsNaN(marketData.IB_LVN) ? "-" : marketData.IB_LVN.ToString(), 
+                                    marketData.IB_High, marketData.IB_Low, marketData.IB_POC, 
+                                    marketData.IB_VAH, marketData.IB_VAL, marketData.IB_TotalVolume, 
+                                    this.EnableCogneeWebhook
+                                ).GetAwaiter().GetResult();
+
                                 this.lastOrderPlacedTime = this.currentSimTime; // Capture order placement time
                                 this.lastTradedDate = currentDate; // Track which date we traded
                                 this.Log($"Triggering Trade Execution: Side={marketData.Signal.PreferredSide}, Entry={marketData.Signal.EntryPrice}", StrategyLoggingLevel.Trading);
