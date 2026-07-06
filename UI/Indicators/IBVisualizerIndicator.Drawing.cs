@@ -59,6 +59,9 @@ namespace CustomStrategies
             var mainWindow = this.CurrentChart.MainWindow;
             var converter = mainWindow.CoordinatesConverter;
 
+            System.Drawing.Region oldClip = graphics.Clip;
+            graphics.SetClip(mainWindow.ClientRectangle);
+
             DateTime leftTime = converter.GetTime(mainWindow.ClientRectangle.Left);
             DateTime rightTime = converter.GetTime(mainWindow.ClientRectangle.Right);
 
@@ -80,6 +83,8 @@ namespace CustomStrategies
 
                 DrawLiveInfoTable(graphics, font, textBrush, debugBrush, baseX, baseY, boxWidth, currentIstTime);
             }
+
+            graphics.Clip = oldClip;
         }
 
         private void DrawHistoricalProfiles(Graphics graphics, IChartWindow mainWindow, DateTime leftTime, DateTime rightTime, Font font, Font debugFont, SolidBrush textBrush, SolidBrush debugBrush)
