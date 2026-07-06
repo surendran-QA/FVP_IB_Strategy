@@ -1,6 +1,0 @@
-fix(architecture): enhance logging synchronicity and indicator payload processing
-
-- Reverted 'AnalyzeSetupAsync' to execute synchronously on the main thread when webhooks are disabled. This prevents Quantower backtesting engine crashes caused by silent cross-thread exceptions.
-- Added aggressive 'Directory.CreateDirectory' in 'CogneeIntegrationService' to guarantee log folder exists prior to 'File.AppendAllText' execution.
-- Fixed a bug where 'exitReason' was incorrectly mapped instead of 'tradeResult' in Post-Trade Memory Payload.
-- Updated PnL calculation in 'IBVisualizerIndicator' to correctly handle "LONG" string variants.

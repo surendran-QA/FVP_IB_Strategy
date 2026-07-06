@@ -86,13 +86,14 @@ namespace CustomStrategies.Calculations
             return signal;
         }
 
-        public void UpdateSignalStatus(TradeSignal signal, double currentHigh, double currentLow)
+        public void UpdateSignalStatus(TradeSignal signal, double currentHigh, double currentLow, DateTime currentTime)
         {
             if (signal.Status == "Waiting")
             {
                 if (currentLow <= signal.EntryPrice && currentHigh >= signal.EntryPrice)
                 {
                     signal.Status = "In Trade";
+                    signal.EntryTime = currentTime;
                 }
             }
 
@@ -101,16 +102,32 @@ namespace CustomStrategies.Calculations
                 if (signal.PreferredSide == "LONG" || signal.PreferredSide == "FADE" || signal.PreferredSide == "BREAKOUT")
                 {
                     if (currentLow <= signal.StopLoss)
+                    {
                         signal.Status = "SL Hit";
+                        signal.ExitReason = "SL Hit";
+                        signal.ExitTime = currentTime;
+                    }
                     else if (currentHigh >= signal.TakeProfit)
+                    {
                         signal.Status = "TP Hit";
+                        signal.ExitReason = "TP Hit";
+                        signal.ExitTime = currentTime;
+                    }
                 }
                 else if (signal.PreferredSide == "SHORT")
                 {
                     if (currentHigh >= signal.StopLoss)
+                    {
                         signal.Status = "SL Hit";
+                        signal.ExitReason = "SL Hit";
+                        signal.ExitTime = currentTime;
+                    }
                     else if (currentLow <= signal.TakeProfit)
+                    {
                         signal.Status = "TP Hit";
+                        signal.ExitReason = "TP Hit";
+                        signal.ExitTime = currentTime;
+                    }
                 }
             }
         }

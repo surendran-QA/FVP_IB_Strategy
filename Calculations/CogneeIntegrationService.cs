@@ -10,14 +10,14 @@ namespace FVP_IB_Strategy.Calculations
     public interface ICogneeIntegrationService
     {
         Task<string> AnalyzeSetupAsync(
-            string assetName, DateTime barTime, string ibShape,
+            string strategyName, string assetName, DateTime barTime, string ibShape,
             string ibHvn1, string ibHvn2, string ibLvn,
             double ibHigh, double ibLow, double ibPoc,
             double ibVah, double ibVal, double totalVolume,
             bool enableWebhook);
 
         void AppendCogneePayload(
-            string filePath, string assetName, DateTime barTime,
+            string filePath, string strategyName, string assetName, DateTime barTime,
             string ibShape, string tradingSignal, string tradeResult,
             string exitReason, string ibHvn1, string ibHvn2,
             string ibLvn, double ibHigh, double ibLow,
@@ -45,6 +45,7 @@ namespace FVP_IB_Strategy.Calculations
         }
 
         public async Task<string> AnalyzeSetupAsync(
+            string strategyName,
             string assetName,
             DateTime barTime,
             string ibShape,
@@ -69,11 +70,20 @@ namespace FVP_IB_Strategy.Calculations
             string vahPct = ibRange > 0 ? ((ibVah - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
             string valPct = ibRange > 0 ? ((ibVal - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
 
+            string assetGroup = assetName;
+            if (assetName.StartsWith("MNQ") || assetName.StartsWith("NQ")) assetGroup = "NQ";
+            else if (assetName.StartsWith("MES") || assetName.StartsWith("ES")) assetGroup = "ES";
+            else if (assetName.StartsWith("MGC") || assetName.StartsWith("GC")) assetGroup = "GC";
+            else if (assetName.StartsWith("M2K") || assetName.StartsWith("RTY")) assetGroup = "RTY";
+            else if (assetName.StartsWith("MYM") || assetName.StartsWith("YM")) assetGroup = "YM";
+
             string payload = $@"
 [SESSION ID: {sessionId}]
 [MARKET CONTEXT NODE]
+Strategy: {strategyName}
 Event Tag: PRE_TRADE: Signal Generated
 Day of Week: {dayOfWeek}
+Asset Group: {assetGroup}
 Asset: {assetName}
 Timestamp: {date} {time}
 
@@ -138,6 +148,7 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
 
         public void AppendCogneePayload(
             string filePath,
+            string strategyName,
             string assetName,
             DateTime barTime,
             string ibShape,
@@ -178,11 +189,20 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 else if (tradeResult == "AI Override") mappedEventTag = "VETO: AI Overridden";
                 else if (tradeResult == "Pending Cancelled" || tradeResult == "Not Triggered") mappedEventTag = "TRADE_CANCELLED: Entry Not Triggered";
 
+                string assetGroup = assetName;
+                if (assetName.StartsWith("MNQ") || assetName.StartsWith("NQ")) assetGroup = "NQ";
+                else if (assetName.StartsWith("MES") || assetName.StartsWith("ES")) assetGroup = "ES";
+                else if (assetName.StartsWith("MGC") || assetName.StartsWith("GC")) assetGroup = "GC";
+                else if (assetName.StartsWith("M2K") || assetName.StartsWith("RTY")) assetGroup = "RTY";
+                else if (assetName.StartsWith("MYM") || assetName.StartsWith("YM")) assetGroup = "YM";
+
                 string payload = $@"
 [SESSION ID: {sessionId}]
 [MARKET CONTEXT NODE]
+Strategy: {strategyName}
 Event Tag: {mappedEventTag}
 Day of Week: {dayOfWeek}
+Asset Group: {assetGroup}
 Asset: {assetName}
 Timestamp: {date} {time}
 
