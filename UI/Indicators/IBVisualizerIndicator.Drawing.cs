@@ -78,11 +78,12 @@ namespace CustomStrategies
             {
                 DrawHistoricalProfiles(graphics, mainWindow, leftTime, rightTime, font, debugFont, textBrush, debugBrush);
                 
-                int boxWidth = 330; // Increased to fit timestamps without clipping
+                int boxWidth = 240; // Absolute minimum width
                 int baseX = mainWindow.ClientRectangle.Right - boxWidth - 10; // Anchored Top-Right with 10px padding
                 int baseY = 20;
 
-                DrawAIInsightsBox(graphics, font, baseX, ref baseY, boxWidth);
+                DailyIB liveIb = cachedIBs.FirstOrDefault(i => !i.IsHistorical);
+                DrawAIInsightsBox(graphics, font, baseX, ref baseY, boxWidth, liveIb);
                 DateTime currentIstTime = DateTime.MinValue;
                 if (this.HistoricalData != null && this.HistoricalData.Count > 0)
                     currentIstTime = TimeZoneInfo.ConvertTimeFromUtc(((HistoryItemBar)this.HistoricalData[0]).TimeLeft, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
@@ -248,20 +249,40 @@ namespace CustomStrategies
             }
         }
 
-        private void DrawAIInsightsBox(Graphics graphics, Font font, int baseX, ref int baseY, int boxWidth)
+        private void DrawAIInsightsBox(Graphics graphics, Font font, int baseX, ref int baseY, int boxWidth, DailyIB liveIb)
         {
             if (ShowAIInsightsBox)
             {
                 using (SolidBrush tableBg = new SolidBrush(Color.FromArgb(200, 25, 25, 25)))
                 using (Pen tableBorder = new Pen(Color.FromArgb(100, 100, 100), 1))
+                using (Pen dividerPen = new Pen(Color.FromArgb(80, 80, 80), 1) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dot })
                 {
-                    int aiHeight = 25;
+                    int aiHeight = 65; // Expanded to fit Liveness and Payload statuses
                     graphics.FillRectangle(tableBg, baseX, baseY, boxWidth, aiHeight);
                     graphics.DrawRectangle(tableBorder, baseX, baseY, boxWidth, aiHeight);
 
                     string aiText = this.EnableCogneeWebhook ? quantInsight : "[AI] Insight: AI Disabled";
                     Color aiColor = this.EnableCogneeWebhook ? Color.Gold : Color.Gray;
                     graphics.DrawString(aiText, font, new SolidBrush(aiColor), baseX + 5, baseY + 5);
+                    
+                    graphics.DrawLine(dividerPen, baseX, baseY + 25, baseX + boxWidth, baseY + 25);
+                    
+                    // Draw Server Liveness
+                    graphics.DrawString(serverLivenessStatus, font, new SolidBrush(serverLivenessColor), baseX + 5, baseY + 28);
+                    
+                    // Draw Payload Statuses
+                    string p1Status = hasSentToCogneeToday ? "Sent" : "Pending";
+                    Color p1Color = hasSentToCogneeToday ? Color.LimeGreen : Color.Gray;
+                    
+                    bool p2Sent = liveIb != null && liveIb.Signal != null && liveIb.Signal.IsMemoryPayloadSent;
+                    string p2Status = p2Sent ? "Sent" : "Pending";
+                    Color p2Color = p2Sent ? Color.LimeGreen : Color.Gray;
+                    
+                    graphics.DrawString("Payload 1: ", font, new SolidBrush(Color.White), baseX + 5, baseY + 45);
+                    graphics.DrawString(p1Status, font, new SolidBrush(p1Color), baseX + 65, baseY + 45);
+                    
+                    graphics.DrawString("Payload 2: ", font, new SolidBrush(Color.White), baseX + 115, baseY + 45);
+                    graphics.DrawString(p2Status, font, new SolidBrush(p2Color), baseX + 175, baseY + 45);
 
                     baseY += aiHeight + 10; // Spacing between boxes
                 }
@@ -280,7 +301,7 @@ namespace CustomStrategies
                     bool hasSignal = liveIb != null && liveIb.Signal != null && liveIb.CurrentShape != VolumeProfileShape.Unknown;
 
                     // --- 2. LIVE IB SIGNAL BOX ---
-                    int ibHeight = hasSignal ? 90 : 35;
+                    int ibHeight = hasSignal ? 110 : 35; // Increased for extra bottom row
                     if (ShowCacheInfo) ibHeight += 35;
                     graphics.FillRectangle(tableBg, baseX, baseY, boxWidth, ibHeight);
                     graphics.DrawRectangle(tableBorder, baseX, baseY, boxWidth, ibHeight);
@@ -298,20 +319,9 @@ namespace CustomStrategies
 
                     if (hasSignal)
                     {
-                        // Calculate Dynamic Bias
-                        string biasStr = "NONE";
-                        Color biasColor = Color.White;
-                        if (liveIb.Signal.TakeProfit > liveIb.Signal.EntryPrice)
-                        {
-                            biasStr = "LONG";
-                            biasColor = Color.LimeGreen;
-                        }
-                        else if (liveIb.Signal.TakeProfit < liveIb.Signal.EntryPrice)
-                        {
-                            biasStr = "SHORT";
-                            biasColor = Color.Tomato;
-                        }
-
+                        // Calculate explicit Bias mathematically (TP > Entry)
+                        string explicitBias = liveIb.Signal.TakeProfit > liveIb.Signal.EntryPrice ? "LONG" : "SHORT";
+                        
                         // Calculate Status & Colors safely (Visual Only)
                         string displayStatus = liveIb.Signal.Status;
                         Color statusColor = Color.Gray; // Default Waiting
@@ -330,7 +340,7 @@ namespace CustomStrategies
                         }
                         else if (displayStatus == "In Trade")
                         {
-                            statusColor = (biasStr == "LONG") ? Color.LimeGreen : Color.Tomato;
+                            statusColor = (explicitBias == "LONG") ? Color.LimeGreen : Color.Tomato;
                             displayStatus = "Active";
                         }
                         else if (displayStatus == "Closed")
@@ -342,31 +352,34 @@ namespace CustomStrategies
                         int row1Y = baseY + 27;
                         int row2Y = baseY + 45;
                         int row3Y = baseY + 68;
+                        int row4Y = baseY + 86; // New row for TP/SL
 
                         int col1X = baseX + 5;
-                        int col2X = baseX + 130;
+                        int col2X = baseX + 125;
 
                         // Left Column (Shape / Side)
                         graphics.DrawString($"Shape: {liveIb.CurrentShape}", font, textBrush, col1X, row1Y);
-                        graphics.DrawString($"Side:  {liveIb.Signal.PreferredSide}", font, textBrush, col1X, row2Y);
+                        
+                        string sideStr = liveIb.Signal.PreferredSide;
+                        if (sideStr == "FADE" || sideStr == "BREAKOUT") 
+                        {
+                            sideStr += $" ({explicitBias})";
+                        }
+                        graphics.DrawString($"Side:  {sideStr}", font, textBrush, col1X, row2Y);
 
                         // Vertical Divider
                         graphics.DrawLine(dividerPen, col2X - 5, baseY + 22, col2X - 5, baseY + 63);
 
-                        // Right Column (Bias / Status)
-                        graphics.DrawString("Bias: ", font, textBrush, col2X, row1Y);
-                        graphics.DrawString(biasStr, font, new SolidBrush(biasColor), col2X + 35, row1Y);
-                        
-                        graphics.DrawString("Stat: ", font, textBrush, col2X, row2Y);
-                        graphics.DrawString(displayStatus, font, new SolidBrush(statusColor), col2X + 30, row2Y);
+                        // Right Column (Status only)
+                        graphics.DrawString("Stat: ", font, textBrush, col2X, row1Y); 
+                        graphics.DrawString(displayStatus, font, new SolidBrush(statusColor), col2X + 30, row1Y);
 
                         // Horizontal Divider
                         graphics.DrawLine(tableBorder, baseX, baseY + 63, baseX + boxWidth, baseY + 63);
 
-                        // Bottom Row (Entry / TP / SL)
+                        // Bottom Rows (Entry top, TP/SL bottom)
                         int botCol1X = baseX + 5;
-                        int botCol2X = baseX + 105;
-                        int botCol3X = baseX + 205;
+                        int botCol2X = baseX + 125;
                         
                         string entryStr = $"Entry: {liveIb.Signal.EntryPrice}";
                         if (liveIb.Signal.EntryTime.HasValue) entryStr += $" ({liveIb.Signal.EntryTime.Value:HH:mm})";
@@ -378,15 +391,17 @@ namespace CustomStrategies
                         if (liveIb.Signal.ExitReason == "SL Hit" && liveIb.Signal.ExitTime.HasValue) slStr += $" ({liveIb.Signal.ExitTime.Value:HH:mm})";
 
                         graphics.DrawString(entryStr, font, textBrush, botCol1X, row3Y);
-                        graphics.DrawString(tpStr, font, textBrush, botCol2X, row3Y);
-                        graphics.DrawString(slStr, font, textBrush, botCol3X, row3Y);
+                        graphics.DrawString(tpStr, font, new SolidBrush(Color.LimeGreen), botCol1X, row4Y);
+                        graphics.DrawString(slStr, font, new SolidBrush(Color.Tomato), botCol2X, row4Y);
                     }
 
                     if (ShowCacheInfo)
                     {
-                        int cacheY = hasSignal ? baseY + 90 : baseY + 35;
+                        int cacheY = hasSignal ? baseY + 110 : baseY + 35;
                         graphics.DrawLine(tableBorder, baseX, cacheY, baseX + boxWidth, cacheY);
-                        graphics.DrawString(currentDayStatus, font, debugBrush, baseX + 5, cacheY + 5);
+                        
+                        string cacheTimeStr = currentChartTime > DateTime.MinValue ? $" ({currentChartTime:yyyy-MM-dd HH:mm:ss})" : "";
+                        graphics.DrawString(currentDayStatus + cacheTimeStr, font, debugBrush, baseX + 5, cacheY + 5);
                         graphics.DrawString(historyStatus, font, textBrush, baseX + 5, cacheY + 20);
                     }
                 }

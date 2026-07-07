@@ -36,6 +36,9 @@ namespace CustomStrategies
         public VolumeProfileShape CurrentShape;
         public Calculations.TradeSignal Signal;
         public bool IsHistorical;
+        public double SessionHigh;
+        public double SessionLow;
+        public double NyOpenPrice;
     }
 
     public partial class IBVisualizerIndicator : Indicator, IVolumeAnalysisIndicator
@@ -83,6 +86,39 @@ namespace CustomStrategies
         protected override void OnUpdate(UpdateArgs args)
         {
             if (this.HistoricalData.Count < 2) return;
+
+            // --- Server Liveness Ping (Every 5 seconds) ---
+            if (DateTime.UtcNow - lastServerCheckTime > TimeSpan.FromSeconds(5))
+            {
+                lastServerCheckTime = DateTime.UtcNow;
+                Task.Run(() => 
+                {
+                    try 
+                    {
+                        using (var client = new System.Net.Sockets.TcpClient())
+                        {
+                            var result = client.BeginConnect("127.0.0.1", 8000, null, null);
+                            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+                            if (success)
+                            {
+                                client.EndConnect(result);
+                                serverLivenessStatus = "Server: Online";
+                                serverLivenessColor = Color.LimeGreen;
+                            }
+                            else
+                            {
+                                serverLivenessStatus = "Server: Offline";
+                                serverLivenessColor = Color.Tomato;
+                            }
+                        }
+                    }
+                    catch 
+                    {
+                        serverLivenessStatus = "Server: Offline";
+                        serverLivenessColor = Color.Tomato;
+                    }
+                });
+            }
 
             var currentBar = (HistoryItemBar)this.HistoricalData[0];
             DateTime istTime = TimeZoneInfo.ConvertTimeFromUtc(currentBar.TimeLeft, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
@@ -188,10 +224,16 @@ namespace CustomStrategies
                 MarketData dummyMd = new MarketData();
                 dummyMd.Signal = ib.Signal;
                 dummyMd.LastCalculatedDate = TimeZoneInfo.ConvertTimeFromUtc(ib.ExecutionStartUtc, istTzCont).Date;
+                dummyMd.SessionHigh = ib.SessionHigh;
+                dummyMd.SessionLow = ib.SessionLow;
+                dummyMd.NyOpenPrice = ib.NyOpenPrice;
 
                 continuousSim.SimulateExecution(dummyMd, this.HistoricalData, ibEndTimeCont, EndTradingTime, istTzCont);
 
-                if (ib.Signal.Status == "Closed" && !ib.Signal.IsMemoryPayloadSent)
+                ib.SessionHigh = dummyMd.SessionHigh;
+                ib.SessionLow = dummyMd.SessionLow;
+
+                if ((ib.Signal.Status == "Closed" || ib.Signal.Status == "Cancelled") && !ib.Signal.IsMemoryPayloadSent)
                 {
                     ib.Signal.IsMemoryPayloadSent = true;
                     string execution = ib.Signal.PreferredSide + " at " + (Math.Abs(ib.Signal.EntryPrice - ib.LVN) < 2.5 ? "LVN" : "POC");
@@ -200,12 +242,18 @@ namespace CustomStrategies
                     string status = ib.Signal.ExitReason ?? "Closed";
                     string result = $"{(pnl > 0 ? "+" : "")}{Math.Round(pnl, 2)} pts";
 
+                    if (ib.Signal.Status == "Cancelled")
+                    {
+                        status = "Not Triggered";
+                        result = "0 pts";
+                    }
+
                     string logPath = global::FVP_IB_Strategy.Config.ProjectPaths.GetLogFilePath();
                     this.cogneeService?.AppendCogneePayload(
                         logPath,
                         this.StrategyName,
                         this.Symbol.Name,
-                        ib.Signal.EntryTime ?? DateTime.UtcNow,
+                        ib.Signal.EntryTime ?? TimeZoneInfo.ConvertTimeFromUtc(ib.ExecutionEndUtc, istTzCont),
                         ib.CurrentShape.ToString(),
                         execution,
                         status,
@@ -222,6 +270,9 @@ namespace CustomStrategies
                         ib.Signal.EntryPrice,
                         ib.Signal.StopLoss,
                         ib.Signal.TakeProfit,
+                        ib.SessionHigh,
+                        ib.SessionLow,
+                        ib.NyOpenPrice,
                         this.EnableCogneeWebhook,
                         this.AutoTriggerGemini
                     );
@@ -296,7 +347,10 @@ namespace CustomStrategies
                 IsPrecise = isPrecise,
                 CurrentShape = md.CurrentShape,
                 Signal = md.Signal,
-                IsHistorical = isHistorical
+                IsHistorical = isHistorical,
+                SessionHigh = md.SessionHigh,
+                SessionLow = md.SessionLow,
+                NyOpenPrice = md.NyOpenPrice
             });
 
             if (isHistorical)

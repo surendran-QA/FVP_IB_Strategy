@@ -1,0 +1,12 @@
+feat(ui): redesign HUD layout and implement explicit payload tracking
+
+UI & Layout Optimizations:
+- Drastically reduced HUD width to an absolute minimum of 240px to prevent chart obstruction.
+- Implemented a two-row bottom section, nesting TP and SL directly beneath the Entry row for compact visibility.
+- Re-introduced explicit mathematical bias calculation to the display (e.g., 'Side: FADE (LONG)') to resolve implicit direction ambiguity.
+- Realigned the 'Stat:' field to perfectly match the top row.
+- Added visual 'Payload 1' and 'Payload 2' status indicators directly into the AI Insights HUD box.
+
+Logging & Integration:
+- Updated CogneeIntegrationService.cs to inject explicit tags ([PAYLOAD 1 SENT] [HIT 1: MORNING SETUP]) into AI_Global_Events.log to definitively track when data is pushed to the backend.
+- Resolved missing System.Drawing directive in IBVisualizerIndicator.Settings.cs.

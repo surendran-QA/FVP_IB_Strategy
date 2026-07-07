@@ -21,6 +21,10 @@ namespace CustomStrategies
         public bool IsIBCalculated { get; set; } = false;
         public DateTime LastCalculatedDate { get; set; } = DateTime.MinValue;
         
+        public double SessionHigh { get; set; } = double.MinValue;
+        public double SessionLow { get; set; } = double.MaxValue;
+        public double NyOpenPrice { get; set; } = double.NaN;
+
         public Calculations.TradeSignal Signal { get; set; } = new Calculations.TradeSignal();
     }
 }

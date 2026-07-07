@@ -23,7 +23,8 @@ namespace FVP_IB_Strategy.Calculations
             string ibLvn, double ibHigh, double ibLow,
             double ibPoc, double ibVah, double ibVal,
             double totalVolume, double entryPrice, double stopLoss,
-            double takeProfit, bool enableWebhook, bool autoCognify);
+            double takeProfit, double sessionHigh, double sessionLow,
+            double nyOpenPrice, bool enableWebhook, bool autoCognify);
     }
 
     public class CogneeIntegrationService : ICogneeIntegrationService, IDisposable
@@ -102,7 +103,7 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 {
                     string logPath = global::FVP_IB_Strategy.Config.ProjectPaths.GetLogFilePath();
                     System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath));
-                    File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [HIT 1: MORNING SETUP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
+                    File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [PAYLOAD 1 SENT] [HIT 1: MORNING SETUP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
                 }
                 catch (Exception ex)
                 {
@@ -167,6 +168,9 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
             double entryPrice,
             double stopLoss,
             double takeProfit,
+            double sessionHigh,
+            double sessionLow,
+            double nyOpenPrice,
             bool enableWebhook,
             bool autoCognify)
         {
@@ -195,6 +199,19 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 else if (assetName.StartsWith("MGC") || assetName.StartsWith("GC")) assetGroup = "GC";
                 else if (assetName.StartsWith("M2K") || assetName.StartsWith("RTY")) assetGroup = "RTY";
                 else if (assetName.StartsWith("MYM") || assetName.StartsWith("YM")) assetGroup = "YM";
+
+                string runawayText = "";
+                if (mappedEventTag == "TRADE_CANCELLED: Entry Not Triggered" && !double.IsNaN(nyOpenPrice))
+                {
+                    bool isLong = tradingSignal.Contains("LONG") || tradingSignal.Contains("BUY");
+                    double extPrice = isLong ? sessionHigh : sessionLow;
+                    double extPct = Math.Round(((extPrice - nyOpenPrice) / nyOpenPrice) * 100, 2);
+                    
+                    double ibExtPts = Math.Round(isLong ? (sessionHigh - ibHigh) : (ibLow - sessionLow), 2);
+                    double ibExtPct = Math.Round(isLong ? (ibExtPts / ibHigh * 100) : (ibExtPts / ibLow * 100), 2);
+                    
+                    runawayText = $" Note: The entry was never triggered. The market trended away, reaching a Session Extreme of {extPrice}, which is a {(extPct > 0 ? "+" : "")}{extPct}% extension from the NY Open, extending {ibExtPts} pts (+{ibExtPct}%) beyond the IB boundary.";
+                }
 
                 string payload = $@"
 [SESSION ID: {sessionId}]
@@ -226,7 +243,7 @@ At {time} on {dayOfWeek}, {date}, {assetName} established its Initial Balance, r
 Primary institutional value is anchored at the POC of {ibPoc} ({pocPct} up from low), contained within the VAH ({ibVah}) and VAL ({ibVal}) boundaries. Session liquidity extremes are marked at a High of {ibHigh} and a Low of {ibLow}. 
 Microstructure analysis dictates primary liquidity sitting at HVN1 ({ibHvn1}) and secondary liquidity at HVN2 ({ibHvn2}), divided by a low-volume liquidity void at LVN ({ibLvn}). 
 Based on this structural state, the algorithm confirms a {tradingSignal} execution logic. The strategic plan dictates an Entry at {entryPrice}, structural invalidation (Stop Loss) at {stopLoss}, and a liquidity target (Take Profit) at {takeProfit}.
-The outcome of the setup was a {tradeResult} due to {exitReason}.
+The outcome of the setup was a {tradeResult} due to {exitReason}.{runawayText}
 ";
 
                 // We acquire lock to write to file to prevent concurrent access issues
@@ -235,10 +252,17 @@ The outcome of the setup was a {tradeResult} due to {exitReason}.
                     try
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                        File.AppendAllText(filePath, payload + Environment.NewLine + Environment.NewLine);
-
+                        
                         string logPath = global::FVP_IB_Strategy.Config.ProjectPaths.GetLogFilePath();
-                        File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [HIT 2: CONSOLIDATED RECAP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
+                        
+                        // If the calling file (Indicator) passes the logPath as the payload path, 
+                        // don't write the payload twice to the same file.
+                        if (filePath != logPath)
+                        {
+                            File.AppendAllText(filePath, payload + Environment.NewLine + Environment.NewLine);
+                        }
+
+                        File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [PAYLOAD 2 SENT] [HIT 2: CONSOLIDATED RECAP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
                     }
                     catch (Exception ex)
                     {

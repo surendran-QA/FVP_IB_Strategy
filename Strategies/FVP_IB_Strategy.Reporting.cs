@@ -224,10 +224,13 @@ namespace CustomStrategies
                     marketData?.IB_POC ?? double.NaN, 
                     marketData?.IB_VAH ?? double.NaN, 
                     marketData?.IB_VAL ?? double.NaN, 
-                    marketData?.IB_TotalVolume ?? 0,
+                    marketData?.IB_TotalVolume ?? double.NaN,
                     entryPrice, 
                     marketData?.Signal?.StopLoss ?? double.NaN, 
                     marketData?.Signal?.TakeProfit ?? double.NaN, 
+                    marketData?.SessionHigh ?? double.NaN,
+                    marketData?.SessionLow ?? double.NaN,
+                    marketData?.NyOpenPrice ?? double.NaN,
                     this.EnableCogneeWebhook, 
                     this.AutoTriggerGemini);
             }

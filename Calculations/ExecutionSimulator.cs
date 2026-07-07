@@ -31,6 +31,10 @@ namespace CustomStrategies.Calculations
                 if (barIst < ibEndIst) continue;
                 if (barIst > sessionEndIst) break;
 
+                // Continually track session extremes
+                if (bar.High > md.SessionHigh) md.SessionHigh = bar.High;
+                if (bar.Low < md.SessionLow) md.SessionLow = bar.Low;
+
                 // 1. Check for Entry if Waiting
                 if (md.Signal.Status == "Waiting")
                 {

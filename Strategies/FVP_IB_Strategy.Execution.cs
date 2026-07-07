@@ -209,10 +209,13 @@ namespace CustomStrategies
                             marketData?.IB_POC ?? double.NaN, 
                             marketData?.IB_VAH ?? double.NaN, 
                             marketData?.IB_VAL ?? double.NaN, 
-                            marketData?.IB_TotalVolume ?? 0,
+                            marketData?.IB_TotalVolume ?? double.NaN, 
                             entryPrice, 
                             marketData?.Signal?.StopLoss ?? double.NaN, 
-                            marketData?.Signal?.TakeProfit ?? double.NaN, 
+                            marketData?.Signal?.TakeProfit ?? double.NaN,
+                            marketData?.SessionHigh ?? double.NaN,
+                            marketData?.SessionLow ?? double.NaN,
+                            marketData?.NyOpenPrice ?? double.NaN,
                             this.EnableCogneeWebhook, 
                             this.AutoTriggerGemini);
                     }
@@ -290,7 +293,7 @@ namespace CustomStrategies
                                             
                                             // Write to Cognee Webhook too
                                             this.cogneeService?.AppendCogneePayload(
-                                                activeCogneePayloadsPath, this.StrategyName, this.CurrentSymbol.Name, estTime, shapeStr, "AI_VETO", "No Signal", "AI Override", ibHvn1, ibHvn2, ibLvn, marketData.IB_High, marketData.IB_Low, marketData.IB_POC, marketData.IB_VAH, marketData.IB_VAL, marketData.IB_TotalVolume, marketData.Signal.EntryPrice, marketData.Signal.StopLoss, marketData.Signal.TakeProfit, this.EnableCogneeWebhook, this.AutoTriggerGemini);
+                                                activeCogneePayloadsPath, this.StrategyName, this.CurrentSymbol.Name, estTime, shapeStr, "AI_VETO", "No Signal", "AI Override", ibHvn1, ibHvn2, ibLvn, marketData.IB_High, marketData.IB_Low, marketData.IB_POC, marketData.IB_VAH, marketData.IB_VAL, marketData.IB_TotalVolume, marketData.Signal.EntryPrice, marketData.Signal.StopLoss, marketData.Signal.TakeProfit, marketData.SessionHigh, marketData.SessionLow, marketData.NyOpenPrice, this.EnableCogneeWebhook, this.AutoTriggerGemini);
                                         }
                                         else
                                         {
@@ -367,6 +370,9 @@ namespace CustomStrategies
                                 marketData.Signal.EntryPrice, 
                                 marketData.Signal.StopLoss, 
                                 marketData.Signal.TakeProfit, 
+                                marketData.SessionHigh,
+                                marketData.SessionLow,
+                                marketData.NyOpenPrice,
                                 this.EnableCogneeWebhook, 
                                 this.AutoTriggerGemini);
                             hasTradedToday = true; // Prevents logging multiple times per day

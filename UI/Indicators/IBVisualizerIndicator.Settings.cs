@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using TradingPlatform.BusinessLayer;
 using CustomStrategies.Calculations;
 using FVP_IB_Strategy.Calculations;
@@ -71,14 +72,19 @@ namespace CustomStrategies
         private bool isIBCalculated = false;
         private bool historyCalculated = false;
         private DateTime lastCalculatedDate = DateTime.MinValue;
+        private DateTime lastSessionDate = DateTime.MinValue;
         private string currentDayStatus = "Live: Initializing...";
         private string historyStatus = "History: Initializing...";
         
+        private DateTime lastServerCheckTime = DateTime.MinValue;
+        private string serverLivenessStatus = "Backend: Initializing...";
+        private Color serverLivenessColor = Color.Gray;
+
         private List<DailyIB> cachedIBs = new List<DailyIB>();
         private InitialBalanceEngine ibEngine = new InitialBalanceEngine();
-        private ICogneeIntegrationService cogneeService;
+        private CogneeIntegrationService cogneeService;
         private bool hasSentToCogneeToday = false;
-        private DateTime lastSessionDate = DateTime.MinValue;
+
         private string quantInsight = "Quant Insight: Waiting for 10:00 AM...";
     }
 }

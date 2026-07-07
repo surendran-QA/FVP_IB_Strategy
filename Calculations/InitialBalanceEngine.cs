@@ -37,6 +37,15 @@ namespace CustomStrategies.Calculations
             // Override High/Low from buffer scan (more accurate than profileCalc estimate)
             data.IB_High = ibHigh;
             data.IB_Low = ibLow;
+            
+            // Initialize session tracking bounds
+            data.SessionHigh = ibHigh;
+            data.SessionLow = ibLow;
+            
+            // Grab NY Open from chronological earliest bar (which is at the end of the buffer if populated in reverse, or front if chronological. Let's just find the oldest bar)
+            var oldestBar = ibPhaseBarBuffer.OrderBy(b => b.TimeLeft).FirstOrDefault();
+            if (oldestBar != null)
+                data.NyOpenPrice = oldestBar.Open;
 
             // 3. Shape Classification
             _shapeDetector.ClassifyShape(data, sortedProfile, currentSymbol.TickSize, doubleDistMinTicks, maxVolume, lvnThreshold, hvn2MinRatio);
@@ -64,9 +73,20 @@ namespace CustomStrategies.Calculations
             if (profileBars.Count == 0)
                 return false;
 
-            // 2. Volume Profile & Value Area Calculation (SRP & Tie-Breaker Fix)
             if (!_profileCalc.CalculateProfile(profileBars, currentSymbol, profileStepTicks, ibLow, out data, out isPrecise, out var sortedProfile, out double maxVolume))
                 return false;
+
+            data.IB_High = ibHigh;
+            data.IB_Low = ibLow;
+            
+            // Initialize session tracking bounds
+            data.SessionHigh = ibHigh;
+            data.SessionLow = ibLow;
+            
+            // Grab NY Open from chronological earliest bar
+            var oldestBar = profileBars.OrderBy(b => b.TimeLeft).FirstOrDefault();
+            if (oldestBar != null)
+                data.NyOpenPrice = oldestBar.Open;
 
             // 3. Shape Classification
             _shapeDetector.ClassifyShape(data, sortedProfile, currentSymbol.TickSize, doubleDistMinTicks, maxVolume, lvnThreshold, hvn2MinRatio);
