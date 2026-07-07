@@ -316,73 +316,10 @@ namespace CustomStrategies
 
                 // Sort cached IBs by date ascending
                 var sortedIBs = cachedIBs.OrderBy(x => x.ExecutionStartUtc).ToList();
-                TimeZoneInfo istTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
 
                 foreach (var ib in sortedIBs)
                 {
-                    DateTime execStartIst = TimeZoneInfo.ConvertTimeFromUtc(ib.ExecutionStartUtc, istTz);
-                    string dayOfWeek = execStartIst.DayOfWeek.ToString();
-                    string sOrderPlaced = execStartIst.ToString("yyyy-MM-dd HH:mm:ss");
-
-                    string sEntryFill = "-";
-                    string sExitTime = "-";
-                    string sideStr = "-";
-                    string entryPriceStr = "-";
-                    string exitPriceStr = "-";
-                    string pnlStr = "0";
-                    string status = "No Signal";
-                    string result = "0 pts";
-
-                    if (ib.Signal != null && ib.CurrentShape != VolumeProfileShape.Unknown)
-                    {
-                        sideStr = ib.Signal.PreferredSide;
-                        entryPriceStr = ib.Signal.EntryPrice.ToString();
-                        status = ib.Signal.Status;
-
-                        if (ib.Signal.EntryTime.HasValue)
-                        {
-                            sEntryFill = ib.Signal.EntryTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
-                        }
-
-                        if (ib.Signal.ExitTime.HasValue)
-                        {
-                            sExitTime = ib.Signal.ExitTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
-                        }
-
-                        if (status == "Closed" && !string.IsNullOrEmpty(ib.Signal.ExitReason))
-                        {
-                            status = ib.Signal.ExitReason;
-                        }
-
-                        // Calculate points & pnl based on signal simulation
-                        double points = 0;
-                        if (ib.Signal.Status == "Closed" && ib.Signal.EntryTime.HasValue)
-                        {
-                            double exitPrice = ib.Signal.ExitReason == "TP Hit" ? ib.Signal.TakeProfit : ib.Signal.StopLoss;
-                            exitPriceStr = exitPrice.ToString();
-                            points = (ib.Signal.PreferredSide == "BUY" || ib.Signal.PreferredSide == "LONG") ? (exitPrice - ib.Signal.EntryPrice) : (ib.Signal.EntryPrice - exitPrice);
-                            double pnl = points * (this.Symbol != null ? (this.Symbol.TickSize > 0 ? (1.0 / this.Symbol.TickSize) * 0.5 : 1) : 1); // rough estimation for MNQ or general points
-                            pnlStr = Math.Round(pnl, 2).ToString();
-                            result = $"{(points > 0 ? "+" : "")}{Math.Round(points, 2)} pts";
-                        }
-                        else if (ib.Signal.Status == "Pending")
-                        {
-                            status = "Pending (Not Triggered)";
-                            result = "0 pts";
-                        }
-                    }
-
-                    string shapeStr = ib.CurrentShape.ToString();
-                    string ibHigh = ib.High.ToString();
-                    string ibLow = ib.Low.ToString();
-                    string ibPoc = ib.POC.ToString();
-                    string ibVah = ib.VAH.ToString();
-                    string ibVal = ib.VAL.ToString();
-                    string ibHvn1 = ib.POC.ToString();
-                    string ibHvn2 = (ib.CurrentShape == VolumeProfileShape.BShape && !double.IsNaN(ib.HVN2)) ? ib.HVN2.ToString() : "-";
-                    string ibLvn = (ib.CurrentShape == VolumeProfileShape.BShape && !double.IsNaN(ib.LVN)) ? ib.LVN.ToString() : "-";
-
-                    global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(csvFilePath, dayOfWeek, sOrderPlaced, sEntryFill, sExitTime, (this.Symbol != null ? this.Symbol.Name : "MNQU26"), sideStr, 1, entryPriceStr, exitPriceStr, pnlStr, status, result, shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
+                    AppendSingleIBToReport(ib, csvFilePath);
                 }
                 historyStatus += " [Report Generated]";
             }
@@ -390,6 +327,74 @@ namespace CustomStrategies
             {
                 historyStatus += $" [Report Failed: {ex.Message}]";
             }
+        }
+
+        private void AppendSingleIBToReport(DailyIB ib, string csvFilePath)
+        {
+            TimeZoneInfo istTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+            DateTime execStartIst = TimeZoneInfo.ConvertTimeFromUtc(ib.ExecutionStartUtc, istTz);
+            string dayOfWeek = execStartIst.DayOfWeek.ToString();
+            string sOrderPlaced = execStartIst.ToString("yyyy-MM-dd HH:mm:ss");
+
+            string sEntryFill = "-";
+            string sExitTime = "-";
+            string sideStr = "-";
+            string entryPriceStr = "-";
+            string exitPriceStr = "-";
+            string pnlStr = "0";
+            string status = "No Signal";
+            string result = "0 pts";
+
+            if (ib.Signal != null && ib.CurrentShape != VolumeProfileShape.Unknown)
+            {
+                sideStr = ib.Signal.PreferredSide;
+                entryPriceStr = ib.Signal.EntryPrice.ToString();
+                status = ib.Signal.Status;
+
+                if (ib.Signal.EntryTime.HasValue)
+                {
+                    sEntryFill = ib.Signal.EntryTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+
+                if (ib.Signal.ExitTime.HasValue)
+                {
+                    sExitTime = ib.Signal.ExitTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+
+                if (status == "Closed" && !string.IsNullOrEmpty(ib.Signal.ExitReason))
+                {
+                    status = ib.Signal.ExitReason;
+                }
+
+                // Calculate points & pnl based on signal simulation
+                double points = 0;
+                if (ib.Signal.Status == "Closed" && ib.Signal.EntryTime.HasValue)
+                {
+                    double exitPrice = ib.Signal.ExitReason == "TP Hit" ? ib.Signal.TakeProfit : ib.Signal.StopLoss;
+                    exitPriceStr = exitPrice.ToString();
+                    points = (ib.Signal.PreferredSide == "BUY" || ib.Signal.PreferredSide == "LONG") ? (exitPrice - ib.Signal.EntryPrice) : (ib.Signal.EntryPrice - exitPrice);
+                    double pnl = points * (this.Symbol != null ? (this.Symbol.TickSize > 0 ? (1.0 / this.Symbol.TickSize) * 0.5 : 1) : 1); // rough estimation for MNQ or general points
+                    pnlStr = Math.Round(pnl, 2).ToString();
+                    result = $"{(points > 0 ? "+" : "")}{Math.Round(points, 2)} pts";
+                }
+                else if (ib.Signal.Status == "Pending")
+                {
+                    status = "Pending (Not Triggered)";
+                    result = "0 pts";
+                }
+            }
+
+            string shapeStr = ib.CurrentShape.ToString();
+            string ibHigh = ib.High.ToString();
+            string ibLow = ib.Low.ToString();
+            string ibPoc = ib.POC.ToString();
+            string ibVah = ib.VAH.ToString();
+            string ibVal = ib.VAL.ToString();
+            string ibHvn1 = ib.POC.ToString();
+            string ibHvn2 = (ib.CurrentShape == VolumeProfileShape.BShape && !double.IsNaN(ib.HVN2)) ? ib.HVN2.ToString() : "-";
+            string ibLvn = (ib.CurrentShape == VolumeProfileShape.BShape && !double.IsNaN(ib.LVN)) ? ib.LVN.ToString() : "-";
+
+            global::FVP_IB_Strategy.Calculations.ReportExporter.AppendReportRow(csvFilePath, dayOfWeek, sOrderPlaced, sEntryFill, sExitTime, (this.Symbol != null ? this.Symbol.Name : "MNQU26"), sideStr, 1, entryPriceStr, exitPriceStr, pnlStr, status, result, shapeStr, ibHigh, ibLow, ibPoc, ibVah, ibVal, ibLvn, ibHvn1, ibHvn2);
         }
     }
 }

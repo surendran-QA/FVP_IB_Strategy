@@ -37,6 +37,12 @@ namespace CustomStrategies
                     {
                         ib.IsHistorical = true;
                         currentDayStatus = "Live: Waiting for IB";
+                        
+                        if (GenerateReport)
+                        {
+                            string csvFilePath = System.IO.Path.Combine(global::FVP_IB_Strategy.Config.ProjectPaths.GetBaseStrategyDirectory(), "IndicatorReport.csv");
+                            AppendSingleIBToReport(ib, csvFilePath);
+                        }
                     }
                 }
                 
@@ -72,9 +78,9 @@ namespace CustomStrategies
             {
                 DrawHistoricalProfiles(graphics, mainWindow, leftTime, rightTime, font, debugFont, textBrush, debugBrush);
                 
-                int baseX = mainWindow.ClientRectangle.Right - 260; // Anchored Top-Right
+                int boxWidth = 330; // Increased to fit timestamps without clipping
+                int baseX = mainWindow.ClientRectangle.Right - boxWidth - 10; // Anchored Top-Right with 10px padding
                 int baseY = 20;
-                int boxWidth = 300; // Increased to fit timestamps
 
                 DrawAIInsightsBox(graphics, font, baseX, ref baseY, boxWidth);
                 DateTime currentIstTime = DateTime.MinValue;
