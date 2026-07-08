@@ -83,6 +83,17 @@ namespace CustomStrategies.Calculations
                     break;
             }
 
+            // RELIABILITY FIX: LVN Slippage Protection
+            if (data.CurrentShape == VolumeProfileShape.BShape && !double.IsNaN(data.IB_LVN))
+            {
+                // If our entry price is trapped inside the liquidity vacuum (within 2 ticks of LVN)
+                if (Math.Abs(signal.EntryPrice - data.IB_LVN) <= (tickSize * 2))
+                {
+                    // Push the entry to the nearest safe HVN wall to ensure we actually get filled
+                    signal.EntryPrice = (signal.EntryPrice > data.IB_POC) ? data.IB_HVN1 : data.IB_HVN2;
+                }
+            }
+
             return signal;
         }
 

@@ -1,4 +1,5 @@
 using System;
+using CustomStrategies.Models;
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
@@ -233,43 +234,38 @@ namespace CustomStrategies
                         {
                             if (this.EnableCogneeWebhook)
                             {
+                                // RELIABILITY FIX: 3-Second API Debounce
+                                if ((DateTime.Now - lastAiRequestTime).TotalSeconds < 3) 
+                                {
+                                    return; // Silently skip execution on this tick to prevent API spam
+                                }
+                                lastAiRequestTime = DateTime.Now;
+
                                 this.isAwaitingAiScore = true;
                                 this.Log("Consulting AI memory graph for trade consensus...", StrategyLoggingLevel.Trading);
                                 
                                 System.Threading.Tasks.Task.Run(async () => {
                                     try 
                                     {
-                                        string response = await this.cogneeService.AnalyzeSetupAsync(
-                                            this.StrategyName, 
-                                            this.CurrentSymbol.Name, estTime, marketData.CurrentShape.ToString(), 
-                                            marketData.IB_HVN1.ToString(), 
-                                            double.IsNaN(marketData.IB_HVN2) ? "-" : marketData.IB_HVN2.ToString(), 
-                                            double.IsNaN(marketData.IB_LVN) ? "-" : marketData.IB_LVN.ToString(), 
-                                            marketData.IB_High, marketData.IB_Low, marketData.IB_POC, 
-                                            marketData.IB_VAH, marketData.IB_VAL, marketData.IB_TotalVolume, 
-                                            this.EnableCogneeWebhook
-                                        );
-                                        
-                                        // Strictly-Typed JSON Parsing (ARCH-01 Compliance)
-                                        double winProb = 50; // Fallback
-                                        try 
-                                        {
-                                            using (System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(response))
-                                            {
-                                                if (doc.RootElement.TryGetProperty("win_probability", out var probElement))
-                                                {
-                                                    string probStr = probElement.GetString()?.Replace("%", "").Trim();
-                                                    if (double.TryParse(probStr, out double parsedProb))
-                                                    {
-                                                        winProb = parsedProb;
-                                                    }
-                                                }
-                                            }
-                                        } 
-                                        catch (System.Text.Json.JsonException jsonEx) 
-                                        { 
-                                            this.Log($"AI JSON Parse Error: {jsonEx.Message}. Using baseline 50%.", StrategyLoggingLevel.Error);
-                                        }
+                                        PayloadContext ctx = new PayloadContext {
+                                            StrategyName = this.StrategyName,
+                                            Symbol = this.CurrentSymbol.Name,
+                                            EstTime = estTime,
+                                            Shape = marketData.CurrentShape.ToString(),
+                                            IbHvn1 = marketData.IB_HVN1.ToString(),
+                                            IbHvn2 = double.IsNaN(marketData.IB_HVN2) ? "-" : marketData.IB_HVN2.ToString(),
+                                            IbLvn = double.IsNaN(marketData.IB_LVN) ? "-" : marketData.IB_LVN.ToString(),
+                                            IbHigh = marketData.IB_High,
+                                            IbLow = marketData.IB_Low,
+                                            IbPoc = marketData.IB_POC,
+                                            IbVah = marketData.IB_VAH,
+                                            IbVal = marketData.IB_VAL,
+                                            TotalVolume = marketData.IB_TotalVolume,
+                                            EnableWebhook = this.EnableCogneeWebhook,
+                                            AutoCognify = this.AutoTriggerGemini
+                                        };
+
+                                        double winProb = await this.cogneeService.AnalyzeSetupAsync(ctx);
 
                                         if (winProb < 40)
                                         {
@@ -304,6 +300,10 @@ namespace CustomStrategies
                                         }
                                         hasTradedToday = true;
                                     }
+                                    catch (Exception ex)
+                                    {
+                                        this.Log($"CRITICAL Webhook Failure: {ex.Message}. Bypassing AI constraint to prevent bot paralysis.", StrategyLoggingLevel.Error);
+                                    }
                                     finally 
                                     {
                                         this.isAwaitingAiScore = false;
@@ -313,16 +313,24 @@ namespace CustomStrategies
                             else
                             {
                                 // Call it synchronously just to trigger the local file logging
-                                _ = this.cogneeService.AnalyzeSetupAsync(
-                                    this.StrategyName, 
-                                    this.CurrentSymbol.Name, estTime, marketData.CurrentShape.ToString(), 
-                                    marketData.IB_HVN1.ToString(), 
-                                    double.IsNaN(marketData.IB_HVN2) ? "-" : marketData.IB_HVN2.ToString(), 
-                                    double.IsNaN(marketData.IB_LVN) ? "-" : marketData.IB_LVN.ToString(), 
-                                    marketData.IB_High, marketData.IB_Low, marketData.IB_POC, 
-                                    marketData.IB_VAH, marketData.IB_VAL, marketData.IB_TotalVolume, 
-                                    this.EnableCogneeWebhook
-                                ).GetAwaiter().GetResult();
+                                PayloadContext ctx = new PayloadContext {
+                                    StrategyName = this.StrategyName,
+                                    Symbol = this.CurrentSymbol.Name,
+                                    EstTime = estTime,
+                                    Shape = marketData.CurrentShape.ToString(),
+                                    IbHvn1 = marketData.IB_HVN1.ToString(),
+                                    IbHvn2 = double.IsNaN(marketData.IB_HVN2) ? "-" : marketData.IB_HVN2.ToString(),
+                                    IbLvn = double.IsNaN(marketData.IB_LVN) ? "-" : marketData.IB_LVN.ToString(),
+                                    IbHigh = marketData.IB_High,
+                                    IbLow = marketData.IB_Low,
+                                    IbPoc = marketData.IB_POC,
+                                    IbVah = marketData.IB_VAH,
+                                    IbVal = marketData.IB_VAL,
+                                    TotalVolume = marketData.IB_TotalVolume,
+                                    EnableWebhook = this.EnableCogneeWebhook,
+                                    AutoCognify = this.AutoTriggerGemini
+                                };
+                                _ = this.cogneeService.AnalyzeSetupAsync(ctx).GetAwaiter().GetResult();
 
                                 this.lastOrderPlacedTime = this.currentSimTime; // Capture order placement time
                                 this.lastTradedDate = currentDate; // Track which date we traded

@@ -1,4 +1,5 @@
 using System;
+using CustomStrategies.Models;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -9,12 +10,7 @@ namespace FVP_IB_Strategy.Calculations
 {
     public interface ICogneeIntegrationService
     {
-        Task<string> AnalyzeSetupAsync(
-            string strategyName, string assetName, DateTime barTime, string ibShape,
-            string ibHvn1, string ibHvn2, string ibLvn,
-            double ibHigh, double ibLow, double ibPoc,
-            double ibVah, double ibVal, double totalVolume,
-            bool enableWebhook);
+        Task<double> AnalyzeSetupAsync(PayloadContext ctx);
 
         void AppendCogneePayload(
             string filePath, string strategyName, string assetName, DateTime barTime,
@@ -45,55 +41,41 @@ namespace FVP_IB_Strategy.Calculations
             _memoryThrottle?.Dispose();
         }
 
-        public async Task<string> AnalyzeSetupAsync(
-            string strategyName,
-            string assetName,
-            DateTime barTime,
-            string ibShape,
-            string ibHvn1,
-            string ibHvn2,
-            string ibLvn,
-            double ibHigh,
-            double ibLow,
-            double ibPoc,
-            double ibVah,
-            double ibVal,
-            double totalVolume,
-            bool enableWebhook)
+        public async Task<double> AnalyzeSetupAsync(PayloadContext ctx)
         {
-            string date = barTime.ToString("yyyy-MM-dd");
-            string time = barTime.ToString("HH:mm:ss");
-            string dayOfWeek = barTime.DayOfWeek.ToString();
-            string sessionId = $"{assetName}_{date}";
+            string date = ctx.EstTime.ToString("yyyy-MM-dd");
+            string time = ctx.EstTime.ToString("HH:mm:ss");
+            string dayOfWeek = ctx.EstTime.DayOfWeek.ToString();
+            string sessionId = $"{ctx.Symbol}_{date}";
 
-            double ibRange = ibHigh - ibLow;
-            string pocPct = ibRange > 0 ? ((ibPoc - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
-            string vahPct = ibRange > 0 ? ((ibVah - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
-            string valPct = ibRange > 0 ? ((ibVal - ibLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
+            double ibRange = ctx.IbHigh - ctx.IbLow;
+            string pocPct = ibRange > 0 ? ((ctx.IbPoc - ctx.IbLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
+            string vahPct = ibRange > 0 ? ((ctx.IbVah - ctx.IbLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
+            string valPct = ibRange > 0 ? ((ctx.IbVal - ctx.IbLow) / ibRange * 100).ToString("F1") + "%" : "N/A";
 
-            string assetGroup = assetName;
-            if (assetName.StartsWith("MNQ") || assetName.StartsWith("NQ")) assetGroup = "NQ";
-            else if (assetName.StartsWith("MES") || assetName.StartsWith("ES")) assetGroup = "ES";
-            else if (assetName.StartsWith("MGC") || assetName.StartsWith("GC")) assetGroup = "GC";
-            else if (assetName.StartsWith("M2K") || assetName.StartsWith("RTY")) assetGroup = "RTY";
-            else if (assetName.StartsWith("MYM") || assetName.StartsWith("YM")) assetGroup = "YM";
+            string assetGroup = ctx.Symbol;
+            if (ctx.Symbol.StartsWith("MNQ") || ctx.Symbol.StartsWith("NQ")) assetGroup = "NQ";
+            else if (ctx.Symbol.StartsWith("MES") || ctx.Symbol.StartsWith("ES")) assetGroup = "ES";
+            else if (ctx.Symbol.StartsWith("MGC") || ctx.Symbol.StartsWith("GC")) assetGroup = "GC";
+            else if (ctx.Symbol.StartsWith("M2K") || ctx.Symbol.StartsWith("RTY")) assetGroup = "RTY";
+            else if (ctx.Symbol.StartsWith("MYM") || ctx.Symbol.StartsWith("YM")) assetGroup = "YM";
 
             string payload = $@"
 [SESSION ID: {sessionId}]
 [MARKET CONTEXT NODE]
-Strategy: {strategyName}
+Strategy: {ctx.StrategyName}
 Event Tag: PRE_TRADE: Signal Generated
 Day of Week: {dayOfWeek}
 Asset Group: {assetGroup}
-Asset: {assetName}
+Asset: {ctx.Symbol}
 Timestamp: {date} {time}
 
 [STRUCTURAL STATE NODE]
-Profile Shape: {ibShape}
-Total Session Volume: {totalVolume}
-Session Extremes: IB_High {ibHigh} | IB_Low {ibLow}
-Value Area: VAH {ibVah} ({vahPct}) | POC {ibPoc} ({pocPct}) | VAL {ibVal} ({valPct})
-Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
+Profile Shape: {ctx.Shape}
+Total Session Volume: {ctx.TotalVolume}
+Session Extremes: IB_High {ctx.IbHigh} | IB_Low {ctx.IbLow}
+Value Area: VAH {ctx.IbVah} ({vahPct}) | POC {ctx.IbPoc} ({pocPct}) | VAL {ctx.IbVal} ({valPct})
+Microstructure: HVN1 {ctx.IbHvn1} | HVN2 {ctx.IbHvn2} | LVN_Gap {ctx.IbLvn}
 ";
 
             // Global Logging
@@ -103,7 +85,7 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 {
                     string logPath = global::FVP_IB_Strategy.Config.ProjectPaths.GetLogFilePath();
                     System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath));
-                    File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [PAYLOAD 1 SENT] [HIT 1: MORNING SETUP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
+                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [PAYLOAD 1 SENT] [HIT 1: MORNING SETUP] {sessionId}" + Environment.NewLine + payload + Environment.NewLine);
                 }
                 catch (Exception ex)
                 {
@@ -111,7 +93,7 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 }
             }
 
-            if (!enableWebhook) return "{\"ai_score\": \"50\", \"win_probability\": \"50%\", \"narrative\": \"Webhook Disabled\"}";
+            if (!ctx.EnableWebhook) return 50.0;
 
             bool lockAcquired = false;
             try
@@ -120,23 +102,55 @@ Microstructure: HVN1 {ibHvn1} | HVN2 {ibHvn2} | LVN_Gap {ibLvn}
                 if (!lockAcquired)
                 {
                     System.Diagnostics.Debug.WriteLine("Failed to acquire memory throttle lock. Skipping analysis.");
-                    return "{\"ai_score\": \"50\", \"win_probability\": \"50%\", \"narrative\": \"Lock Timeout\"}";
+                    return 50.0;
                 }
 
                 string safePayload = payload.Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "");
                 string jsonPayload = $"{{\"payload\": \"{safePayload}\"}}";
 
                 var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync("http://127.0.0.1:8000/analyze", content);
-                string responseStr = await response.Content.ReadAsStringAsync();
+                var responseMessage = await _httpClient.PostAsync("http://127.0.0.1:8000/analyze", content);
+                string responseStr = await responseMessage.Content.ReadAsStringAsync();
 
-                // Return the raw JSON directly to the caller for strictly-typed parsing
-                return responseStr;
+                // Pure Service Layer JSON Parsing Extraction
+                double winProb = 50.0; 
+                try 
+                {
+                    using (System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(responseStr))
+                    {
+                        if (doc.RootElement.TryGetProperty("error_flag", out var errElement) && errElement.GetBoolean())
+                        {
+                            // Internal API Fallback engaged
+                        }
+                        else if (doc.RootElement.TryGetProperty("confidence_score", out var probElement))
+                        {
+                            string probStr = probElement.GetString()?.Replace("%", "").Trim();
+                            if (double.TryParse(probStr, out double parsedProb))
+                            {
+                                winProb = parsedProb;
+                            }
+                        }
+                        else if (doc.RootElement.TryGetProperty("win_probability", out var oldProbElement))
+                        {
+                            string probStr = oldProbElement.GetString()?.Replace("%", "").Trim();
+                            if (double.TryParse(probStr, out double parsedProb))
+                            {
+                                winProb = parsedProb;
+                            }
+                        }
+                    }
+                } 
+                catch 
+                {
+                    // Parsing failure falls back to 50% seamlessly
+                }
+                
+                return winProb;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to analyze setup: {ex.Message}");
-                return $"{{\"ai_score\": \"50\", \"win_probability\": \"50%\", \"narrative\": \"Error - {ex.Message}\"}}";
+                return 50.0;
             }
             finally
             {

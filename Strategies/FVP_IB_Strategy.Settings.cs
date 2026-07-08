@@ -88,6 +88,7 @@ namespace CustomStrategies
         private DateTime lastOrderPlacedTime = DateTime.MinValue;
         private HashSet<string> processedPositionIds = new HashSet<string>();
         private bool isAwaitingAiScore = false;
+        private DateTime lastAiRequestTime = DateTime.MinValue;
 
         private string activeCsvFilePath;
         private string activeAllSignalsCsvPath;

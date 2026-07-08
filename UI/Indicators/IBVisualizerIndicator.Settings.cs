@@ -71,6 +71,8 @@ namespace CustomStrategies
 
         private bool isIBCalculated = false;
         private bool historyCalculated = false;
+        private int fallbackRetryCount = 0;
+        private DateTime lastRetryBarTime = DateTime.MinValue;
         private DateTime lastCalculatedDate = DateTime.MinValue;
         private DateTime lastSessionDate = DateTime.MinValue;
         private string currentDayStatus = "Live: Initializing...";

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CustomStrategies.Models;
 using System.Linq;
 using System.Drawing;
 using System.Net.Http;
@@ -39,6 +40,7 @@ namespace CustomStrategies
         public double SessionHigh;
         public double SessionLow;
         public double NyOpenPrice;
+        public DateTime LastUpdatedUtc;
     }
 
     public partial class IBVisualizerIndicator : Indicator, IVolumeAnalysisIndicator
@@ -140,6 +142,7 @@ namespace CustomStrategies
             if (isIBPhase)
             {
                 isIBCalculated = false;
+                fallbackRetryCount = 0;
                 currentDayStatus = "Waiting for IB phase to finish";
                 return;
             }
@@ -157,58 +160,57 @@ namespace CustomStrategies
                     ExecutionSimulator sim = new ExecutionSimulator();
                     sim.SimulateExecution(md, this.HistoricalData, ibEndTime, EndTradingTime, istTz);
 
-                    CacheIB(md, istTime.Date, isPrecise, false);
+                    CacheIB(md, istTime.Date, isPrecise, false, currentBar.TimeLeft);
                     currentDayStatus = "Live: " + (isPrecise ? "Precise" : "Fallback");
 
-                    isIBCalculated = true;
-                    lastCalculatedDate = istTime.Date;
-
-                    // FIRE WEBHOOK TO COGNEE (Phase 2.1)
-                    if (!hasSentToCogneeToday)
+                    if (isPrecise || fallbackRetryCount >= 5)
                     {
-                        hasSentToCogneeToday = true;
+                        isIBCalculated = true;
+                        lastCalculatedDate = istTime.Date;
 
-                        quantInsight = "Quant Insight: Analyzing...";
-
-                        Task.Run(async () =>
+                        // FIRE WEBHOOK TO COGNEE (Phase 2.1)
+                        if (!hasSentToCogneeToday)
                         {
-                            if (this.cogneeService != null)
-                            {
-                                string responseStr = await this.cogneeService.AnalyzeSetupAsync(
-                                    this.StrategyName,
-                                    this.Symbol.Name,
-                                    istTime,
-                                    md.CurrentShape.ToString(),
-                                    md.IB_HVN1.ToString(),
-                                    double.IsNaN(md.IB_HVN2) ? "-" : md.IB_HVN2.ToString(),
-                                    double.IsNaN(md.IB_LVN) ? "-" : md.IB_LVN.ToString(),
-                                    md.IB_High,
-                                    md.IB_Low,
-                                    md.IB_POC,
-                                    md.IB_VAH,
-                                    md.IB_VAL,
-                                    md.IB_TotalVolume,
-                                    this.EnableCogneeWebhook);
+                            hasSentToCogneeToday = true;
 
-                                string parsedScore = "50";
-                                string parsedProb = "50%";
-                                try
+                            quantInsight = "Quant Insight: Analyzing...";
+
+                            Task.Run(async () =>
+                            {
+                                if (this.cogneeService != null)
                                 {
-                                    using (System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(responseStr))
-                                    {
-                                        if (doc.RootElement.TryGetProperty("confidence_score", out var scoreElement))
-                                            parsedScore = scoreElement.GetString() ?? "50";
-                                        if (doc.RootElement.TryGetProperty("historical_win_rate", out var probElement))
-                                            parsedProb = probElement.GetString() ?? "50%";
-                                    }
-                                    this.quantInsight = $"Quant Insight: Score {parsedScore} | Probability {parsedProb}";
+                                    PayloadContext ctx = new PayloadContext {
+                                        StrategyName = this.StrategyName,
+                                        Symbol = this.Symbol.Name,
+                                        EstTime = istTime,
+                                        Shape = md.CurrentShape.ToString(),
+                                        IbHvn1 = md.IB_HVN1.ToString(),
+                                        IbHvn2 = double.IsNaN(md.IB_HVN2) ? "-" : md.IB_HVN2.ToString(),
+                                        IbLvn = double.IsNaN(md.IB_LVN) ? "-" : md.IB_LVN.ToString(),
+                                        IbHigh = md.IB_High,
+                                        IbLow = md.IB_Low,
+                                        IbPoc = md.IB_POC,
+                                        IbVah = md.IB_VAH,
+                                        IbVal = md.IB_VAL,
+                                        TotalVolume = md.IB_TotalVolume,
+                                        EnableWebhook = this.EnableCogneeWebhook,
+                                        AutoCognify = false
+                                    };
+
+                                    double winProb = await this.cogneeService.AnalyzeSetupAsync(ctx);
+                                    this.quantInsight = $"Quant Insight: Confidence Score {winProb}%";
                                 }
-                                catch
-                                {
-                                    this.quantInsight = "Quant Insight: JSON Parse Error";
-                                }
-                            }
-                        });
+                            });
+                        }
+                    }
+                    else
+                    {
+                        // Limit to one retry attempt per 1-minute candle
+                        if (lastRetryBarTime != currentBar.TimeLeft)
+                        {
+                            fallbackRetryCount++;
+                            lastRetryBarTime = currentBar.TimeLeft;
+                        }
                     }
                 }
             }
@@ -307,7 +309,7 @@ namespace CustomStrategies
                                 sim.SimulateExecution(md, this.HistoricalData, ibEndTime, EndTradingTime, istTz);
 
                                 processedDates.Add(currentSimDate);
-                                CacheIB(md, currentSimDate, isPrecise, true);
+                                CacheIB(md, currentSimDate, isPrecise, true, bar.TimeLeft);
                             }
                         }
                     }
@@ -315,7 +317,7 @@ namespace CustomStrategies
             }
         }
 
-        private void CacheIB(MarketData md, DateTime currentSimDate, bool isPrecise, bool isHistorical)
+        private void CacheIB(MarketData md, DateTime currentSimDate, bool isPrecise, bool isHistorical, DateTime currentUtcTime)
         {
             TimeZoneInfo istTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
             DateTime profileStartIst = currentSimDate.Add(new TimeSpan(9, 30, 0));
@@ -350,7 +352,8 @@ namespace CustomStrategies
                 IsHistorical = isHistorical,
                 SessionHigh = md.SessionHigh,
                 SessionLow = md.SessionLow,
-                NyOpenPrice = md.NyOpenPrice
+                NyOpenPrice = md.NyOpenPrice,
+                LastUpdatedUtc = currentUtcTime
             });
 
             if (isHistorical)
