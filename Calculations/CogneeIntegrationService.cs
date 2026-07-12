@@ -27,17 +27,20 @@ namespace FVP_IB_Strategy.Calculations
     {
         private readonly object _lockObj = new object();
         private readonly HttpClient _httpClient;
+        private readonly SemaphoreSlim _analyzeThrottle;
         private readonly SemaphoreSlim _memoryThrottle;
 
         public CogneeIntegrationService()
         {
             _httpClient = new HttpClient();
+            _analyzeThrottle = new SemaphoreSlim(1, 1);
             _memoryThrottle = new SemaphoreSlim(1, 1);
         }
 
         public void Dispose()
         {
             _httpClient?.Dispose();
+            _analyzeThrottle?.Dispose();
             _memoryThrottle?.Dispose();
         }
 
@@ -98,15 +101,19 @@ Microstructure: HVN1 {ctx.IbHvn1} | HVN2 {ctx.IbHvn2} | LVN_Gap {ctx.IbLvn}
             bool lockAcquired = false;
             try
             {
-                lockAcquired = await _memoryThrottle.WaitAsync(TimeSpan.FromSeconds(5));
+                lockAcquired = await _analyzeThrottle.WaitAsync(TimeSpan.FromSeconds(5));
                 if (!lockAcquired)
                 {
-                    System.Diagnostics.Debug.WriteLine("Failed to acquire memory throttle lock. Skipping analysis.");
-                    return 50.0;
+                    // C1 FAIL-CLOSED: could not even send the request. Return a sub-threshold
+                    // sentinel (<40) so the caller VETOES rather than trading blind on 50.
+                    System.Diagnostics.Debug.WriteLine("Failed to acquire analyze throttle lock. Skipping analysis.");
+                    return -1.0;
                 }
 
-                string safePayload = payload.Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "");
-                string jsonPayload = $"{{\"payload\": \"{safePayload}\"}}";
+                var requestBody = new {
+                    payload = payload
+                };
+                string jsonPayload = System.Text.Json.JsonSerializer.Serialize(requestBody);
 
                 var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
                 var responseMessage = await _httpClient.PostAsync("http://127.0.0.1:8000/analyze", content);
@@ -156,7 +163,7 @@ Microstructure: HVN1 {ctx.IbHvn1} | HVN2 {ctx.IbHvn2} | LVN_Gap {ctx.IbLvn}
             {
                 if (lockAcquired)
                 {
-                    _memoryThrottle.Release();
+                    _analyzeThrottle.Release();
                 }
             }
         }
