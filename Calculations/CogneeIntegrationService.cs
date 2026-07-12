@@ -111,7 +111,19 @@ Microstructure: HVN1 {ctx.IbHvn1} | HVN2 {ctx.IbHvn2} | LVN_Gap {ctx.IbLvn}
                 }
 
                 var requestBody = new {
-                    payload = payload
+                    payload = payload,
+                    fields = new {
+                        session_id = sessionId,
+                        symbol = ctx.Symbol,
+                        ib_high = ctx.IbHigh,
+                        ib_low = ctx.IbLow,
+                        ib_poc = ctx.IbPoc,
+                        ib_vah = ctx.IbVah,
+                        ib_val = ctx.IbVal,
+                        ib_hvn1 = ctx.IbHvn1,
+                        ib_hvn2 = ctx.IbHvn2,
+                        ib_lvn = ctx.IbLvn
+                    }
                 };
                 string jsonPayload = System.Text.Json.JsonSerializer.Serialize(requestBody);
 
@@ -303,9 +315,27 @@ The outcome of the setup was a {tradeResult} due to {exitReason}.{runawayText}
                             return;
                         }
 
-                        string safePayload = payload.Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "");
-                        string autoCognifyStr = autoCognify ? "true" : "false";
-                        string jsonPayload = $"{{\"payload\": \"{safePayload}\", \"auto_cognify\": {autoCognifyStr}}}";
+                        var requestBody = new {
+                            payload = payload,
+                            auto_cognify = autoCognify,
+                            fields = new {
+                                session_id = sessionId,
+                                symbol = assetName,
+                                event_tag = mappedEventTag,
+                                ib_high = ibHigh,
+                                ib_low = ibLow,
+                                ib_poc = ibPoc,
+                                ib_vah = ibVah,
+                                ib_val = ibVal,
+                                total_volume = totalVolume,
+                                entry_price = entryPrice,
+                                take_profit = takeProfit,
+                                stop_loss = stopLoss,
+                                trade_result = tradeResult,
+                                exit_reason = exitReason
+                            }
+                        };
+                        string jsonPayload = System.Text.Json.JsonSerializer.Serialize(requestBody);
 
                         var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
                         await _httpClient.PostAsync("http://127.0.0.1:8000/memory", content);
