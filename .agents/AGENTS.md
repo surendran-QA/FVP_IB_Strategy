@@ -86,3 +86,31 @@ When managing a trade's lifecycle, the C# strategy must strictly limit its commu
   1. **C# Trading Engine:** `C:\Surendran\Fixed volume profile with congee\FVP_IB_Strategy` (Active branch: `feature/phase2`)
   2. **Python Cognee AI Backend:** `C:\Surendran\Fixed volume profile with congee\FVP_IB_Cognee_Backend` (Active branch: `feature/phase2_congee`)
   Whenever modifying the Phase 2 AI integration, you MUST check BOTH folders to ensure the C# JSON payloads precisely match the Python Pydantic/FastAPI expected schemas.
+
+<RULE[user_global]>
+## Strict Version Control Guardrail
+- NEVER execute `git commit` or `git push` commands automatically.
+- Before committing or pushing any code to a repository, you MUST explicitly ask the user for permission and wait for their approval.
+- You may still run safe, non-modifying commands like `git status` or `git diff` without asking.
+</RULE[user_global]>
+
+
+<RULE[user_global]>
+## Databento Calendar Spread Corruption
+When reading raw Databento trade files (`.dbn.zst`) into a Pandas DataFrame using `to_df()`, the file may contain multiple symbols, including Calendar Spreads (which trade at differential prices like 300.00 instead of 30,000.00). 
+- If you do not filter these out, it will instantly corrupt High, Low, and Volume Profile calculations.
+- **MANDATORY FIX:** You must ALWAYS filter the DataFrame to isolate the front-month outright contract by finding the symbol without a hyphen (`-`) that has the maximum volume, before performing any price analysis:
+  `outright_symbols = df[~df['symbol'].str.contains('-')]`
+  `front_month_symbol = outright_symbols['symbol'].value_counts().idxmax()`
+  `df = df[df['symbol'] == front_month_symbol].copy()`
+</RULE[user_global]>
+
+
+<RULE[user_global]>
+## Strict Forward-Looking Bias Prevention (The Time Wall)
+When writing, refactoring, or optimizing backtesting engines (especially in Python or C#), you MUST mathematically segregate Indicator Generation from Trade Execution.
+- **Phase 1 (Calculation):** All indicators (like Volume Profile, POC, Value Area, and Shapes) MUST be calculated using a strictly bounded chronological slice of data (e.g., `09:30 to 10:00`). You may never calculate these metrics using `rth_df` (the full session) if the strategy trades intra-day.
+- **Phase 2 (Execution):** The execution simulator must start immediately *after* the calculation window ends (e.g., `10:01 to 16:00`). The simulator is strictly forbidden from accessing future data to alter the locked-in indicators.
+- **Violations:** Breaking this rule causes Forward-Looking Bias, rendering the entire backtest mathematically invalid.
+</RULE[user_global]>
+
