@@ -25,6 +25,7 @@ namespace FVP_IB_Strategy.Calculations
 
     public class CogneeIntegrationService : ICogneeIntegrationService, IDisposable
     {
+        private static readonly System.Diagnostics.ActivitySource ActivitySource = new System.Diagnostics.ActivitySource("FVP_IB_Strategy.Telemetry");
         private readonly object _lockObj = new object();
         private readonly HttpClient _httpClient;
         private readonly SemaphoreSlim _analyzeThrottle;
@@ -127,8 +128,20 @@ Microstructure: HVN1 {ctx.IbHvn1} | HVN2 {ctx.IbHvn2} | LVN_Gap {ctx.IbLvn}
                 };
                 string jsonPayload = System.Text.Json.JsonSerializer.Serialize(requestBody);
 
-                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                var responseMessage = await _httpClient.PostAsync("http://127.0.0.1:8000/analyze", content);
+                string traceparent = $"00-{Guid.NewGuid().ToString("N")}-{Guid.NewGuid().ToString("N").Substring(0, 16)}-01";
+                using (var activity = ActivitySource.StartActivity("trade_decision"))
+                {
+                    if (activity != null)
+                    {
+                        traceparent = $"00-{activity.TraceId.ToHexString()}-{activity.SpanId.ToHexString()}-01";
+                    }
+                }
+
+                var request = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:8000/analyze");
+                request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                request.Headers.Add("traceparent", traceparent);
+                
+                var responseMessage = await _httpClient.SendAsync(request);
                 string responseStr = await responseMessage.Content.ReadAsStringAsync();
 
                 // Pure Service Layer JSON Parsing Extraction
@@ -315,6 +328,15 @@ The outcome of the setup was a {tradeResult} due to {exitReason}.{runawayText}
                             return;
                         }
 
+                        // Calculate estimated slippage ticks
+                        double plannedEntry = ibPoc;
+                        if (ibShape.Contains("D")) 
+                        {
+                            plannedEntry = tradingSignal.Contains("LONG") || tradingSignal.Contains("BUY") ? ibVal : ibVah;
+                        }
+                        double slippagePrice = Math.Abs(entryPrice - plannedEntry);
+                        double slippageTicks = slippagePrice / 0.25; // 0.25 tick size estimate
+
                         var requestBody = new {
                             payload = payload,
                             auto_cognify = autoCognify,
@@ -332,13 +354,17 @@ The outcome of the setup was a {tradeResult} due to {exitReason}.{runawayText}
                                 take_profit = takeProfit,
                                 stop_loss = stopLoss,
                                 trade_result = tradeResult,
-                                exit_reason = exitReason
+                                exit_reason = exitReason,
+                                slippage_ticks = Math.Round(slippageTicks, 2)
                             }
                         };
                         string jsonPayload = System.Text.Json.JsonSerializer.Serialize(requestBody);
 
-                        var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                        await _httpClient.PostAsync("http://127.0.0.1:8000/memory", content);
+                        string traceparent = $"00-{Guid.NewGuid().ToString("N")}-{Guid.NewGuid().ToString("N").Substring(0, 16)}-01";
+                        var request = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:8000/memory");
+                        request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                        request.Headers.Add("traceparent", traceparent);
+                        await _httpClient.SendAsync(request);
                     }
                     catch (Exception ex)
                     {
